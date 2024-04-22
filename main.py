@@ -1,67 +1,84 @@
 from transitions.extensions import GraphMachine
 from transitions import Machine, Transition
 
-from typing import Callable
+from typing import Callable, List, Dict
 from functools import partialmethod, partial
 
-import demo_cards as dc
-
+import demo_player as dp
+import demo_game as dg
 
 if __name__ == '__main__':
+    max_troops = 12
+    players = 4
 
-    def get_legal_triggers(machine):
-        triggers = machine.get_triggers(machine.model.state)
-        triggers = list(filter(lambda trigger: not trigger.startswith('to_'), triggers))
-        legal_triggers = []
-        for trigger in triggers:
-            if getattr(machine.model, f'may_{trigger}')():
-                legal_triggers.append(trigger)
-        return list(set(legal_triggers))
+    def generate_transitions(game: 'Game') -> List[Dict]:
+        transitions = []
+        # Agent Turn
+        for card in game.cards:
+            for location in game.locations:
+                transition = {
+                    'trigger': f'play_{card.name}_to_{location.name}',
+                    'source': 'start',
+                    'dest': 'agent_turn',
+                    'conditions': partial(game.current_player.is_playable_to, card, location),
+                    'after': partial(game.current_player.play_card_to, card, location)}
+                transitions.append(transition)
+        # Plot Cards
+        for plot in game.plots:
+            transition = {
+                'trigger': f'plot_{plot.name}',
+                'source': ['start', 'agent_turn', 'reveal_turn', 'shop'],
+                'dest': '=',
+                'conditions': partial(game.current_player.plot_is_playable, plot),
+                'after': partial(game.current_player.play_plot, plot)
+            }
+            transitions.append(transition)
+        # End Turn
+        transitions.extend(
+            [
+                {'trigger': 'end_turn', 'source': ['agent_turn', 'reveal_turn', 'shop'], 'dest': 'end', },
+                {'trigger': 'end_turn', 'source': 'start', 'dest': 'end', 'conditions': lambda: game.current_player.has_revealed},
+            ]
+        )
+        # Reveal Turn
+        transitions.extend(
+            [
+                {'trigger': 'reveal', 'source': 'start', 'dest': 'reveal_turn',
+                 'conditions': lambda: not game.current_player.has_revealed, 'after': game.current_player.reveal},
+            ]
+        )
+        # Shop
+        shop_transition = [{'trigger': f'buy_{card.name}',
+                            'source': ['reveal_turn', 'shop'],
+                            'dest': 'shop',
+                            'conditions': partial(game.current_player.can_buy, card),
+                            'after': partial(game.current_player.buy, card)}
+                           for card in game.cards]
+        transitions.extend(shop_transition)
+        # Garrison
+        transitions.extend(
+            [
+                {'trigger': f'deploy_{i}',
+                 'source': ['start', 'agent_turn', 'reveal_turn', 'shop'],
+                 'dest': '=',
+                 'conditions': partial(game.current_player.can_deploy, i),
+                 'after': partial(game.current_player.deploy, i)}
+                for i in range(1, max_troops)
+            ]
+        )
+        return transitions
 
-    def walk(machine):
-        while True:
-            triggers = get_legal_triggers(machine)
-            if len(triggers) == 0:
-                raise Exception("Dead End state!")
-            print(f'Current State: {machine.get_state(machine.model.state).name}')
-            print('Actions:')
-            [print(f'\t{i} - {trigger}') for i, trigger in enumerate(triggers)]
-            choice = int(input(f"Choose an Action (0-{len(triggers)-1}): "))
-            machine.model.trigger(triggers[choice])
 
-    class Game(object):
-        def __init__(self):
-            self.money = 0
-            self.cards = dc.cards
-            self.hand_cards = self.cards[:-1]
-
-        def is_playable(self, card: dc.Card):
-            return card in self.hand_cards
-
-        def play_card(self, card: dc.Card):
-            card.play(self)
-            self.hand_cards.remove(card)
-
-
-    game = Game()
+    game = dg.Game()
     machine = GraphMachine(
+        name="player_turn",
         model=game,
-        states=['start', 'played_card'],
+        states=['start', 'agent_turn', 'reveal_turn', 'shop', 'end'],
         initial='start',
-        transitions=[
-            {'trigger': f'play_{card.name}', 'source': 'start', 'dest': 'played_card',
-             'conditions': partial(game.is_playable, card), 'after': partial(game.play_card, card)}
-            for card in game.cards
-        ] + [
-            {'trigger': 'back', 'source': 'played_card', 'dest': 'start', }
+        transitions=generate_transitions(game) + [
+            {'trigger': 'back', 'source': 'end', 'dest': 'start', },
         ],
-        show_conditions=True
-
     )
+    game.set_game_machine(machine)
 
-    game.get_graph().draw('test.png', prog='dot')
-
-    walk(machine)
-
-
-
+    game.walk()

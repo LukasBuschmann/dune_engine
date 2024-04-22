@@ -1,0 +1,28 @@
+digraph "State Machine" {
+	graph [color=black directed=true fillcolor=white label="State Machine" rankdir=LR "strict"=false style=solid]
+	node [color=black fillcolor=white peripheries=1 shape=rectangle style="rounded, filled"]
+	edge [color=black]
+	start [label="start\l"]
+	agent_turn [label="agent_turn\l" color=blue fillcolor=azure2 peripheries=1]
+	reveal_turn [label="reveal_turn\l"]
+	shop [label="shop\l"]
+	end [label="end\l" color=red fillcolor=darksalmon peripheries=2]
+	start -> agent_turn [label="play_card_to_location"]
+	start -> start [label="plot_card
+deploy_troops"]
+	start -> end [label=end_turn]
+	start -> reveal_turn [label=reveal]
+	agent_turn -> agent_turn [label="plot_card
+deploy_troops"]
+	agent_turn -> end [label=end_turn color=blue]
+	reveal_turn -> reveal_turn [label="plot_card
+deploy_troops"]
+	reveal_turn -> end [label=end_turn]
+	reveal_turn -> shop [label="buy_card"]
+	shop -> shop [label="plot_card
+buy_card
+deploy_troops"]
+	shop -> end [label=end_turn]
+	end -> start [label=back]
+}
+

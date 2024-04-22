@@ -1,32 +1,49 @@
 from typing import Callable
 
 
-class Card:
-    def __init__(self, name: str, effect: Callable):
-        self.name = name
-        self.effect = effect
 
-    def play(self, game):
+class Card:
+    def __init__(self, name: str, effect: Callable[['Game'], None] = lambda game: None, reveal_effect: Callable[['Game'], None] = lambda game: None, cost: int = 0):
+        self.name: str = name
+        self.effect: Callable[['Game'], None] = effect
+        self.reveal_effect: Callable[['Game'], None] = reveal_effect
+        self.cost: int = cost
+
+    def play(self, game: 'Game'):
         self.effect(game)
+
+    def reveal(self, game: 'Game'):
+        self.reveal_effect(game)
 
     def __repr__(self):
         return self.name
 
 
-def card1_effect(game):
-    game.money += 1
+class PlotIntrigue:
+    def __init__(self, name: str, effect: Callable[['Game'], None], requirements: Callable[['Game'], bool]):
+        self.name: str = name
+        self.effect: Callable[['Game'], None] = effect
+        self.requirements: Callable[['Game'], bool] = requirements
 
+    def play(self, game: 'Game'):
+        self.effect(game)
 
-def card2_effect(game):
-    game.money -= 1
+    def is_playable(self, game: 'Game'):
+        return self.requirements(game)
 
-
-def card3_effect(game):
-    game.money = 10
+    def __repr__(self):
+        return self.name
 
 
 cards = [
-    Card("card1", card1_effect),
-    Card("card2", card2_effect),
-    Card("card3", card3_effect)
+    Card("Kwisatz_Haderach", lambda game: setattr(game, "spice", game.spice + 1),  lambda game: setattr(game, "spice", game.spice + 4)  ),
+    Card("Fremen", lambda game: setattr(game, "money", game.money + 1)),
+    Card("Emperor", lambda game: setattr(game, "money", game.money + 1)),
+]
+
+plots = [
+    PlotIntrigue("Spice_Harvest",  lambda game: setattr(game, "money", game.money + 1), lambda game: game.money >= 3),
+    PlotIntrigue("Attack_on_the_Emperor",  lambda game: (setattr(game, "money", game.spice + 1)), lambda game: game.spice <= 3),
+    PlotIntrigue("git_gud",  lambda game: (setattr(game, "to_deploy", game.to_deploy + 2)), lambda game: game.spice <= 3),
+    PlotIntrigue("Guild_Heist",  lambda game: setattr(game, "money", game.money + 1), lambda game: True)
 ]

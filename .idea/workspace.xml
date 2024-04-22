@@ -4,18 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="c6760d21-e55b-484b-a7f2-fc4ce444784b" name="Changes" comment="Python State Machine test">
-      <change afterPath="$PROJECT_DIR$/model/Agent.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/model/Effects.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/model/Game.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/model/Player.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/model/Round.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/model/constants.py" afterDir="false" />
+    <list default="true" id="c6760d21-e55b-484b-a7f2-fc4ce444784b" name="Changes" comment="Switched State Machine Package to &quot;transitions&quot;">
+      <change afterPath="$PROJECT_DIR$/.idea/watcherTasks.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/demo_game.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/demo_player.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/demo_turn.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/board.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/reduced_card_deck.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/state_diagram" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/demo_cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/demo_cards.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/model/Board.py" beforeDir="false" afterPath="$PROJECT_DIR$/model/Board.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/model/Cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/model/Cards.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/model/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/model/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/model/Board.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/model/Cards.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/model/Factions.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/model/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/demo_board.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,6 +35,12 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/.venv/Lib/site-packages/transitions/core.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/.venv/Lib/site-packages/transitions/extensions/diagrams.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/.venv/Lib/site-packages/transitions/extensions/markup.py" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/.venv/Lib/site-packages/wheel/cli/__init__.py" root0="SKIP_INSPECTION" />
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6
 }</component>
@@ -41,23 +50,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.scratch.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;E:/Programme/Python/dune_engine/dune_engine&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.github.copilot.settings.ApplicationConfigurable&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.main.executor": "Run",
+    "Python.scratch.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "master",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "E:/Programme/Python/dune_engine/dune_engine/resources",
+    "settings.editor.selected.configurable": "watcher.settings"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File&quot;: [
-      &quot;Python&quot;
+  "keyToStringList": {
+    "com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File": [
+      "Python"
     ]
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="E:\Programme\Python\dune_engine\dune_engine\resources" />
       <recent name="E:\Programme\Python\dune_engine\dune_engine" />
     </key>
   </component>
@@ -144,7 +156,15 @@
       <option name="project" value="LOCAL" />
       <updated>1713622353156</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="Switched State Machine Package to &quot;transitions&quot;">
+      <option name="closed" value="true" />
+      <created>1713635538148</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1713635538148</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -161,6 +181,7 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="initial commit" />
     <MESSAGE value="Python State Machine test" />
-    <option name="LAST_COMMIT_MESSAGE" value="Python State Machine test" />
+    <MESSAGE value="Switched State Machine Package to &quot;transitions&quot;" />
+    <option name="LAST_COMMIT_MESSAGE" value="Switched State Machine Package to &quot;transitions&quot;" />
   </component>
 </project>
