@@ -29,26 +29,34 @@ class Game:
     def walk(self):
         while True:
             current_state = self.game_machine.get_state(self.state).name
-            print(f'Current State: {current_state} [$ {self.current_player.money}, S {self.current_player.spice}]')
-            # if self.state == 'agent_turn':
-            #     self.trigger('back')
+
+            print(f'Current State: {current_state} [$ {self.current_player.money}, S {self.current_player.spice}, T {self.current_player.to_deploy}/{self.current_player.garrison}]')
+            print(f'Hand Cards: {self.current_player.hand_cards} \t {self.current_player.current_card}')
+            print(f'Plots: {self.current_player.hand_plot_cards}')
+
             triggers = self.get_legal_triggers()
+
             if len(triggers) == 0:
                 raise Exception("Dead End state!")
+
             print('Actions:')
             [print(f'\t{i} - {trigger}') for i, trigger in enumerate(triggers)]
+
             self.update_graph_picture()
+
             choice = int(input(f"Choose an Action (0-{len(triggers)-1}): "))
             self.trigger(triggers[choice])
+            print("\n\n")
 
     def update_graph_picture(self):
         import re
         import graphviz
         replacements = [
-            ('play_', 'play_card_to_location'),
-            ('plot_', 'plot_card'),
-            ('buy_', 'buy_card'),
-            ('deploy_', 'deploy_troops'),
+            # ('card_', '<CARD>'),
+            # ('plot_', '<PLOT_INTRIGUE>'),
+            # ('location_', '<LOCATION>'),
+            # ('buy_', 'buy_<CARD>'),
+            # ('deploy_', 'deploy_<N>_troops'),
         ]
         graph = self.game_machine.get_graph(show_roi=False)
         graph_string = str(graph)

@@ -1,22 +1,91 @@
-from typing import Callable
+from typing import Callable, List, Set
+
+from enums import Icon
+
+class Requirement:
+    def __init__(self, requirement: Callable[['Game'], bool], fulfillment: Callable[['Game'], None]):
+        self.requirement: Callable[['Game'], bool] = requirement
+        self.fulfillment: Callable[['Game'], None] = fulfillment
+
+    def is_met(self, game: 'Game'):
+        return self.requirement(game)
+
+    def fulfill(self, game: 'Game'):
+        self.fulfillment(game)
 
 
-
-class Card:
-    def __init__(self, name: str, effect: Callable[['Game'], None] = lambda game: None, reveal_effect: Callable[['Game'], None] = lambda game: None, cost: int = 0):
-        self.name: str = name
+class Effect:
+    def __init__(self, effect: Callable[['Game'], None]):
         self.effect: Callable[['Game'], None] = effect
-        self.reveal_effect: Callable[['Game'], None] = reveal_effect
-        self.cost: int = cost
 
-    def play(self, game: 'Game'):
+    def execute(self, game: 'Game'):
         self.effect(game)
 
+
+class NoEffect(Effect):
+    def __init__(self):
+        self.effect = lambda game: None
+
+    def execute(self, game: 'Game'):
+        pass
+
+
+class BinaryDecisionEffectWithRequirement(Effect):
+    def __init__(self, effect: Callable[['Game'], None], requirement: Requirement, decision_effect: Callable[['Game'], None]):
+        super().__init__(effect)
+        self.requirement: Requirement = requirement
+        self.decision_effect: Callable[['Game'], None] = decision_effect
+
+    def decision_possible(self, game: 'Game'):
+        return self.requirement.is_met(game)
+
+    def execute_decision(self, game: 'Game', decision: bool):
+        if decision:
+            self.requirement.fulfill(game)
+            self.decision_effect(game)
+        self.execute(game) # applying standard effect. Will mostly be empty
+
+
+class NoRequirement(Requirement):
+    def __init__(self):
+        self.requirement = lambda game: True
+        self.fulfillment = lambda game: None
+
+    def is_met(self, game: 'Game'):
+        return True
+
+    def fulfill(self, game: 'Game'):
+        pass
+
+class Card:
+    def __init__(self,
+                 name: str,
+                 persuasion_cost: int = 0,
+                 icons: Set[Icon] = {Icon.IMPERIUM, Icon.DESERT, Icon.FREMEN},
+                 factions: List[str] = ['all'],
+                 agent_effect: Effect = NoEffect(),
+                 reveal_effect: Effect = NoEffect(),
+                 removal_effect: Effect = NoEffect(),
+                 acquisition_effect: Effect = NoEffect()):
+        self.name: str = name
+        self.persuasion_cost: int = persuasion_cost
+        self.icons: Set[Icon] = icons
+        self.factions: List[str] = factions
+        self.agent_effect: Effect = agent_effect
+        self.reveal_effect: Effect = reveal_effect
+        self.removal_effect: Effect = removal_effect
+        self.acquisition_effect: Effect = acquisition_effect
+
+    def play(self, game: 'Game'):
+        self.agent_effect.execute(game)
+
     def reveal(self, game: 'Game'):
-        self.reveal_effect(game)
+        self.reveal_effect.execute(game)
 
     def __repr__(self):
-        return self.name
+        return self.name + str(self.icons)
+
+
 
 
 class PlotIntrigue:
@@ -35,15 +104,66 @@ class PlotIntrigue:
         return self.name
 
 
+money_effect = Effect(lambda game: setattr(game.current_player, "current_player.money", game.current_player.money + 2))
+
+def debug_effect(game):
+    print("before", game.current_player.spice)
+    game.current_player.spice += 2
+    print("after", game.current_player.spice)
+
+spice_effect = Effect(debug_effect)
+decision_effect = BinaryDecisionEffectWithRequirement(lambda game: setattr(game.current_player, "to_deploy", game.current_player.to_deploy + 1),
+                                                      Requirement(lambda game: game.current_player.spice >= 3, lambda game: setattr(game.current_player, "spice", game.current_player.spice - 3)),
+                                                      lambda game: setattr(game.current_player, "garrison", game.current_player.garrison + 3))
+
 cards = [
-    Card("Kwisatz_Haderach", lambda game: setattr(game, "spice", game.spice + 1),  lambda game: setattr(game, "spice", game.spice + 4)  ),
-    Card("Fremen", lambda game: setattr(game, "money", game.money + 1)),
-    Card("Emperor", lambda game: setattr(game, "money", game.money + 1)),
+    Card("Spice Addict", reveal_effect=money_effect, icons={Icon.FREMEN}),
+    Card("Everywhere Joe"),
+    Card("Decisive General", reveal_effect=decision_effect),
+    Card("Trader", agent_effect=spice_effect, icons={Icon.IMPERIUM}),
 ]
 
+def swappero_effect(game):
+    tmp = game.current_player.spice
+    game.current_player.spice = game.current_player.money
+    game.current_player.money = tmp
+
+
 plots = [
-    PlotIntrigue("Spice_Harvest",  lambda game: setattr(game, "money", game.money + 1), lambda game: game.money >= 3),
-    PlotIntrigue("Attack_on_the_Emperor",  lambda game: (setattr(game, "money", game.spice + 1)), lambda game: game.spice <= 3),
-    PlotIntrigue("git_gud",  lambda game: (setattr(game, "to_deploy", game.to_deploy + 2)), lambda game: game.spice <= 3),
-    PlotIntrigue("Guild_Heist",  lambda game: setattr(game, "money", game.money + 1), lambda game: True)
+    PlotIntrigue("Swappero",  swappero_effect, lambda game: True),
+    PlotIntrigue("Spice_Harvest",  lambda game: setattr(game, "money.current_player.money", game.current_player.money + 1), lambda game: game.current_player.money >= 3),
 ]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+TODO:
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

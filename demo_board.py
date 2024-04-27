@@ -1,25 +1,33 @@
-from typing import List, Callable
+from typing import List, Callable, Set
+
+import demo_cards as dc
+from enums import Icon
+
+
 class Location:
-    def __init__(self, name: str, requirement: Callable[['Game'], bool], effect: Callable[['Game'], None]):
+    def __init__(self, name: str, requirement: dc.Requirement, effect: dc.Effect,
+                 icons: Set[Icon] = {Icon.IMPERIUM, Icon.DESERT, Icon.FREMEN}):
         self.name: str = name
-        self.requirement: Callable[['Game'], bool] = requirement
-        self.effect: Callable[['Game'], None] = effect
+        self.requirement: dc.Requirement = requirement
+        self.effect: dc.Effect = effect
         self.is_occupied: bool = False
+        self.icons: Set[Icon] = icons
 
     def occupy(self, game: 'Game'):
         self.is_occupied = True
-        self.effect(game)
-    def __repr__(self):
-        return self.name
+        self.requirement.fulfill(game)
+        self.effect.execute(game)
 
-def carthag(game: 'Game'):
-    game.spice += 1
-    game.to_deploy += 4
-    game.garrison += 2
+    def __repr__(self):
+        return self.name + str(self.icons)
+
+
+
+
+spice_requirement = dc.Requirement(lambda game: game.current_player.spice >= 2, lambda game: setattr(game.current_player, "spice", game.current_player.spice - 2))
+garrison_effect = dc.Effect(lambda game: setattr(game.current_player, "garrison", game.current_player.garrison + 2))
 
 locations = [
-    Location("Arrakeen", lambda game: game.money >= 3, lambda game: setattr(game, "money", game.money + 1)),
-    Location("Carthag", lambda game: game.spice >= 2, carthag),
-    Location("Hagga_Basin", lambda game: game.money >= 1, lambda game: setattr(game, "money", game.money + 1)),
-    Location("Shield_Wall", lambda game: True, lambda game: setattr(game, "spice", game.spice + 1)),
+    Location("Spice Mine", dc.NoRequirement(), dc.spice_effect, icons={Icon.IMPERIUM, Icon.DESERT}),
+    Location("Fremen Outpost", spice_requirement, garrison_effect, icons={Icon.FREMEN}),
 ]
