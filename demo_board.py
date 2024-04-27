@@ -24,8 +24,8 @@ class Location:
 
 
 
-spice_requirement = dc.Requirement(lambda game: game.current_player.spice >= 2, lambda game: setattr(game.current_player, "spice", game.current_player.spice - 2))
-garrison_effect = dc.Effect(lambda game: setattr(game.current_player, "garrison", game.current_player.garrison + 2))
+spice_requirement = dc.Requirement(lambda game: game.current_player.spice >= 2, lambda game: game.current_player.change_spice(-2))
+garrison_effect = dc.Effect(lambda game: game.current_player.change_garrison(2))
 
 locations = [
     Location("Spice Mine", dc.NoRequirement(), dc.spice_effect, icons={Icon.IMPERIUM, Icon.DESERT}),

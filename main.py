@@ -40,7 +40,7 @@ if __name__ == '__main__':
         transitions.extend(
             [
                 {'trigger': 'end_turn', 'source': 'Shop', 'dest': 'end', },
-                {'trigger': 'end_turn', 'source': 'Revealing', 'dest': 'end', 'conditions': partial(lambda: not game.current_player.has_hand_cards)},
+                {'trigger': 'end_turn', 'source': 'Revealed', 'dest': 'end'},
                 {'trigger': 'end_turn', 'source': 'start', 'dest': 'end',
                  'conditions': lambda: game.current_player.has_revealed},
             ]
@@ -53,14 +53,14 @@ if __name__ == '__main__':
                             'after': partial(game.current_player.buy, card)}
                            for card in game.cards]
         transitions.extend(shop_transition)
-        transitions.append({'trigger': 'buy', 'source': 'Revealing', 'dest': 'Shop', 'conditions': partial(lambda: not game.current_player.has_hand_cards)})
+        transitions.append({'trigger': 'buy', 'source': 'Revealed', 'dest': 'Shop', 'conditions': partial(lambda: not game.current_player.has_hand_cards)})
         # Garrison
         possible_troop_counts = list(range(-max_troops, max_troops+1))
         possible_troop_counts.remove(0)
         transitions.extend(
             [
                 {'trigger': f'deploy_{i}',
-                 'source': ['start', 'Revealing', 'Shop'],
+                 'source': ['start', 'Revealed', 'Shop'],
                  'dest': '=',
                  'conditions': partial(game.current_player.can_change_troop_count, i),
                  'after': partial(game.current_player.deploy, i)}
@@ -107,6 +107,7 @@ if __name__ == '__main__':
             [
                 {'trigger': 'reveal', 'source': 'start', 'dest': 'Revealing',
                  'conditions': lambda: not game.current_player.has_revealed, 'after': game.current_player.reveal},
+                {'trigger': 'done_reveal', 'source': 'Revealing', 'dest': 'Revealed', 'conditions': lambda: not game.current_player.has_hand_cards()}
             ]
         )
         transitions.extend(
@@ -139,13 +140,13 @@ if __name__ == '__main__':
     machine = GraphMachine(
         name="player_turn",
         model=game,
-        states=['start', 'Pick Card', 'Pick Location', 'Pick Plot', 'Card Played', 'Revealing', 'Shop',
+        states=['start', 'Pick Card', 'Pick Location', 'Pick Plot', 'Card Played', 'Revealing', 'Shop', 'Revealed',
                 'end'],
         initial='start',
         transitions=generate_transitions(game) + [
-            {'trigger': 'back', 'source': 'end', 'dest': 'start', },
+            {'trigger': 'back', 'source': 'end', 'dest': 'start', 'after': partial(game.current_player.reset) },
         ],
     )
     game.set_game_machine(machine)
-
-    game.walk()
+    game.update_graph_picture()
+    game.auto_walk()

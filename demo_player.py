@@ -1,5 +1,6 @@
 from transitions import Machine
 from typing import List, Set
+import random
 
 from demo_cards import BinaryDecisionEffectWithRequirement
 from enums import Icon
@@ -8,8 +9,8 @@ class Player(object):
 
     def __init__(self, game: 'Game'):
 
-        self.money: int = 0
-        self.spice: int = 4
+        self.money: int = 20
+        self.spice: int = 20
         self.game: 'Game' = game
         self.hand_cards: List['Card'] = self.game.cards[:-1]
         self.hand_plot_cards: List['Card'] = self.game.plots[:-1]
@@ -23,16 +24,58 @@ class Player(object):
         self.last_state: str = None
         self.to_retreat: int = 0
         self.played_cards: List['Card'] = []
-        """
-        certain cards can add tasks to the task queue these will send player to the specific part of the decision machine
-        Tasks can be derived of subtasks. If the task is started all subtasks musst be completed before another task
-        can be worked on. There is only one level of task hierarchy. The bottom level are elemental tasks meaning all
-        the nodes in the decision machine.
-        Some cards will be able to throw you into a task, once they are played regardless of other current tasks.
-        It is also possible to be prompted to do a task while it is not your turn. This will porbably require a stand-by
-        node after the end node of the turn, where a interrupt can be triggered.
-        """
+        self.deck: List['Card'] = self.game.cards[-1:]
 
+
+    def draw(self):
+        if len(self.deck) == 0:
+            random.shuffle(self.discard_pile)
+            self.deck = self.discard_pile
+            self.discard_pile = []
+        card = self.deck.pop()
+        self.hand_cards.append(card)
+
+    def change_spice(self, n: int):
+        self.spice += n
+        if n > 0:
+            print(f"+Spice: {n}")
+        else:
+            print(f"-Spice: {n}")
+
+    def change_money(self, n: int):
+        self.money += n
+        if n > 0:
+            print(f"+Money: {n}")
+        else:
+            print(f"-Money: {n}")
+
+    def change_garrison(self, n: int):
+        self.garrison += n
+        if n > 0:
+            print(f"+Garrison: {n}")
+        else:
+            print(f"-Garrison: {n}")
+
+    def change_to_deploy(self, n: int):
+        self.to_deploy += n
+        if n > 0:
+            print(f"+To Deploy: {n}")
+        else:
+            print(f"-To Deploy: {n}")
+
+    def change_in_combat(self, n: int):
+        self.in_combat += n
+        if n > 0:
+            print(f"+In Combat: {n}")
+        else:
+            print(f"-In Combat: {n}")
+
+    def change_to_retreat(self, n: int):
+        self.to_retreat += n
+        if n > 0:
+            print(f"+To Retreat: {n}")
+        else:
+            print(f"-To Retreat: {n}")
 
     def has_hand_cards(self):
         return len(self.hand_cards) != 0
@@ -67,7 +110,6 @@ class Player(object):
         [card.reveal_effect.execute(self.game) for card in trivial_reveal]
         self.played_cards.extend(trivial_reveal)
         [self.hand_cards.remove(card) for card in trivial_reveal]
-        # [print(card.reveal_effect.__class__ != BinaryDecisionEffectWithRequirement) for card in self.hand_cards]
         # reveal decision cards that are not allowed to be decided positively
         for card in self.hand_cards:
             effect: BinaryDecisionEffectWithRequirement = card.reveal_effect
@@ -79,6 +121,9 @@ class Player(object):
     def make_reveal_decision(self, card: 'Card', decision: bool):
         effect: BinaryDecisionEffectWithRequirement = card.reveal_effect
         effect.execute_decision(self.game, decision)
+        self.played_cards.append(card)
+        self.hand_cards.remove(card)
+        self.current_card = None
 
     def can_make_reveal_decision(self, card: 'Card'):
         if card not in self.hand_cards:
@@ -96,7 +141,6 @@ class Player(object):
         self.hand_plot_cards.remove(plot)
 
     def play_current_card_and_occupy(self, location: 'Location'):
-        print("doin it")
         self.current_card.play(self.game)
         location.occupy(self.game)
         self.current_card = None
@@ -111,6 +155,7 @@ class Player(object):
     def pick_card(self, card: 'Card'):
         self.current_card = card
         self.hand_cards.remove(card)
+        self.played_cards.append(card)
 
     def set_last_state(self, state: str):
         self.last_state = state
@@ -133,10 +178,19 @@ class Player(object):
                 return True
         return False
 
-    # def on_end_turh(self):
-    #     self.has_revealed = False
-    #     self.to_deploy = 0
-    #     self.in_combat = 0
-    #     self.current_card = None
-    #     self.task_queue = []
-    #     self.icons = []
+    def reset(self):
+        self.has_revealed = False
+        self.to_deploy = 0
+        self.in_combat = 0
+        self.current_card = None
+        self.icons = []
+        self.discard_pile.extend(self.played_cards)
+        self.played_cards = []
+        self.to_retreat = 0
+        self.last_state = 'start'
+        if self.has_revealed and len(self.hand_cards) != 0:
+            raise Exception("Player still has cards in hand after turn!")
+
+
+        self.draw()
+        self.draw()

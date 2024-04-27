@@ -106,15 +106,11 @@ class PlotIntrigue:
 
 money_effect = Effect(lambda game: setattr(game.current_player, "current_player.money", game.current_player.money + 2))
 
-def debug_effect(game):
-    print("before", game.current_player.spice)
-    game.current_player.spice += 2
-    print("after", game.current_player.spice)
 
-spice_effect = Effect(debug_effect)
-decision_effect = BinaryDecisionEffectWithRequirement(lambda game: setattr(game.current_player, "to_deploy", game.current_player.to_deploy + 1),
-                                                      Requirement(lambda game: game.current_player.spice >= 3, lambda game: setattr(game.current_player, "spice", game.current_player.spice - 3)),
-                                                      lambda game: setattr(game.current_player, "garrison", game.current_player.garrison + 3))
+spice_effect = Effect(lambda game: game.current_player.change_spice(2))
+decision_effect = BinaryDecisionEffectWithRequirement(lambda game: game.current_player.change_to_deploy(1),
+                                                      Requirement(lambda game: game.current_player.spice >= 3, lambda game: game.current_player.change_spice(-3)),
+                                                      lambda game: game.current_player.change_garrison(3))
 
 cards = [
     Card("Spice Addict", reveal_effect=money_effect, icons={Icon.FREMEN}),
@@ -124,14 +120,15 @@ cards = [
 ]
 
 def swappero_effect(game):
-    tmp = game.current_player.spice
-    game.current_player.spice = game.current_player.money
-    game.current_player.money = tmp
+    dspice = game.current_player.money - game.current_player.spice
+    dmoney = game.current_player.spice - game.current_player.money
+    game.current_player.change_spice(dspice)
+    game.current_player.change_money(dmoney)
 
 
 plots = [
     PlotIntrigue("Swappero",  swappero_effect, lambda game: True),
-    PlotIntrigue("Spice_Harvest",  lambda game: setattr(game, "money.current_player.money", game.current_player.money + 1), lambda game: game.current_player.money >= 3),
+    PlotIntrigue("Spice_Harvest",  lambda game: game.current_player.change_money(1), lambda game: game.current_player.money >= 3),
 ]
 
 
