@@ -8,9 +8,11 @@ digraph "State Machine" {
 	"Pick Plot" [label="Pick Plot\l"]
 	"Card Played" [label="Card Played\l"]
 	Revealing [label="Revealing\l"]
+	Choicing [label="Choicing\l"]
 	Shop [label="Shop\l"]
 	Revealed [label="Revealed\l"]
 	end [label="end\l"]
+	"Evaluate Effect" [label="Evaluate Effect\l"]
 	"Pick Plot" -> start [label="<PLOT_INTRIGUE>"]
 	"Pick Plot" -> "Card Played" [label="<PLOT_INTRIGUE>"]
 	"Pick Plot" -> Shop [label="<PLOT_INTRIGUE>"]
@@ -28,9 +30,14 @@ digraph "State Machine" {
 	Revealed -> Shop [label=buy]
 	Revealed -> Revealed [label="deploy_<N>_troops"]
 	"Pick Card" -> "Pick Location" [label="<CARD>"]
-	"Pick Location" -> "Card Played" [label="<LOCATION>"]
+	"Pick Location" -> Choicing [label="<LOCATION>"]
 	Revealing -> Revealed [label=done_reveal]
-	Revealing -> Revealing [label="decision_yes | decision_no"]
+	"Evaluate Effect" -> "Card Played" [label=trivial_effect]
+	"Evaluate Effect" -> "Binary Decision" [label=decide_effect]
+	"Binary Decision" -> "Card Played" [label=effect_done]
+	Choicing -> Choicing [label="<CHOICE>"]
+	Choicing -> "Card Played" [label=evaluate_choices]
 	end -> start [label=back]
+	rankdir=TB
 }
 

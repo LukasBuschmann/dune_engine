@@ -1,5 +1,7 @@
 from typing import List, Callable, Set
 
+import Requirement
+from Effect import Effect
 import demo_cards as dc
 from enums import Icon
 
@@ -16,7 +18,7 @@ class Location:
     def occupy(self, game: 'Game'):
         self.is_occupied = True
         self.requirement.fulfill(game)
-        self.effect.execute(game)
+        self.effect.execute(game) #ToDo: this wont work for complex effects
 
     def __repr__(self):
         return self.name + str(self.icons)
@@ -24,10 +26,10 @@ class Location:
 
 
 
-spice_requirement = dc.Requirement(lambda game: game.current_player.spice >= 2, lambda game: game.current_player.change_spice(-2))
-garrison_effect = dc.Effect(lambda game: game.current_player.change_garrison(2))
+spice_requirement = Requirement.SpiceRequirement(2)
+garrison_effect = Effect(lambda game: game.current_player.change_garrison(2)) #ToDo: BUG! This gets triggered twice (requirement only once)
 
 locations = [
-    Location("Spice Mine", dc.NoRequirement(), dc.spice_effect, icons={Icon.IMPERIUM, Icon.DESERT}),
+    Location("Spice Mine", Requirement.noRequirement, dc.spice_effect, icons={Icon.IMPERIUM, Icon.DESERT}),
     Location("Fremen Outpost", spice_requirement, garrison_effect, icons={Icon.FREMEN}),
 ]

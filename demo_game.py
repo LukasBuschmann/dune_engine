@@ -5,14 +5,15 @@ import demo_cards as dc
 import demo_board as db
 import demo_player as dp
 
+import  time
 import random
 
 
 class Game:
     def __init__(self, player_count: int = 4):
-        self.cards: List[dc.Card] = dc.cards
+        self.cards: List[dc.Card] = dc.cardsV2
         self.plots: List[dc.PlotIntrigue] = dc.plots
-        self.shop: List[dc.Card] = self.cards[1:]
+        self.shop: List[dc.Card] = [] #self.cards[1:]
         self.locations: List[db.Location] = db.locations
         self.players: List[dp.Player] = [dp.Player(self) for _ in range(player_count)]
         self.current_player: dp.Player = self.players[0]
@@ -54,6 +55,7 @@ class Game:
             print("\n\n")
 
     def auto_walk(self):
+        start =time.time()
         random.seed(123)
         while True:
             actions = self.get_legal_triggers()
@@ -63,14 +65,17 @@ class Game:
                 raise Exception("Dead End state!")
 
             choice = random.randint(0, len(actions) - 1)
-            print(f"Choosing {actions[choice]} ({choice})")
+            print(f"CHOICE: {actions[choice]} ({choice})\n")
             self.trigger(actions[choice])
             print("\n----------------------------------------------------------------------------------")
+            stop = time.time()
+            print(f"Time: {stop-start}")
 
     def update_graph_picture(self):
         import re
         import graphviz
         replacements = [
+            ('choice_', '<CHOICE>'),
             ('card_', '<CARD>'),
             ('plot_', '<PLOT_INTRIGUE>'),
             ('location_', '<LOCATION>'),
@@ -87,10 +92,9 @@ class Game:
                     occurring.append(new)
             if len(occurring) != 0:
                 pretty_graph += graph_line.split('[')[0] + f"[label=\"{' | '.join(occurring)}\"]\n"
-                # pretty_graph += re.sub(r'"[^"]*"', '"' + '\n'.join(occurring) + '"', graph_line) + '\n'
             else:
                 pretty_graph += graph_line + '\n'
-
+        pretty_graph = pretty_graph.replace('}', '\trankdir=TB\n}')
         modified_graph = graphviz.Source(pretty_graph)
         modified_graph.render('resources/state_diagram', format='png')
 

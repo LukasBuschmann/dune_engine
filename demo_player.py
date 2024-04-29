@@ -1,9 +1,10 @@
 from transitions import Machine
-from typing import List, Set
+from typing import List, Set, ClassVar, Any
 import random
 
 from demo_cards import BinaryDecisionEffectWithRequirement
-from enums import Icon
+from enums import Icon, TurnType
+import Effect
 
 class Player(object):
 
@@ -12,7 +13,7 @@ class Player(object):
         self.money: int = 20
         self.spice: int = 20
         self.game: 'Game' = game
-        self.hand_cards: List['Card'] = self.game.cards[:-1]
+        self.hand_cards: List['Card'] = self.game.cards
         self.hand_plot_cards: List['Card'] = self.game.plots[:-1]
         self.has_revealed: bool = False
         self.discard_pile: List['Card'] = []
@@ -25,7 +26,20 @@ class Player(object):
         self.to_retreat: int = 0
         self.played_cards: List['Card'] = []
         self.deck: List['Card'] = self.game.cards[-1:]
+        self.current_location: 'Location' = None
+        self.open_choices: List[Any] = []
+        self.decided_choices: List[Any] = []
 
+    def has_playable_card_with_agent_effect(self, effect_type: ClassVar):
+        for card in self.hand_cards:
+            if card.agent_effect.__class__ == effect_type:
+                if isinstance(card.agent_effect, Effect.EffectWithRequirement):
+                    effect: Effect.EffectWithRequirement = card.agent_effect
+                    if effect.requirement_met(self.game):
+                        return True
+                else:
+                    return True
+        return False
 
     def draw(self):
         if len(self.deck) == 0:
@@ -140,10 +154,22 @@ class Player(object):
         plot.play(self.game)
         self.hand_plot_cards.remove(plot)
 
-    def play_current_card_and_occupy(self, location: 'Location'):
-        self.current_card.play(self.game)
+    def pick_card(self, card: 'Card'):
+        self.current_card = card
+        self.hand_cards.remove(card)
+        self.played_cards.append(card)
+
+    def pick_location(self, location: 'Location'):
+        self.current_location = location
         location.occupy(self.game)
+
+    def is_playing_trivial_card(self):
+        return self.current_card.agent_effect.__class__ == Effect.Effect
+
+    def play_current_card(self):
+        self.current_card.play(self.game)
         self.current_card = None
+        self.current_location = None
 
     def has_playable_plot(self):
         for plot in self.hand_plot_cards:
@@ -177,6 +203,26 @@ class Player(object):
             if self.location_available_for_card(location, card):
                 return True
         return False
+
+    def pick_choice_card(self, card: 'Card'):
+        self.current_card = card
+        self.open_choices = card.agent_effect.choices
+        self.hand_cards.remove(card)
+    def has_choices(self):
+        return len(self.open_choices) != 0
+    def has_no_choices(self):
+        return not self.has_choices()
+    def can_make_choice(self, choice: Any, choice_type: 'ChoiceType'):
+        if len(self.open_choices) == 0:
+            return False
+        return self.open_choices[0].is_allowed(choice, choice_type, self.game)
+    def make_choice(self, choice: Any):
+        self.open_choices = self.open_choices[1:]
+        self.decided_choices.append(choice)
+    def evaluate_choices(self):
+        self.current_card.agent_effect.execute(self.game, self.decided_choices)
+        self.decided_choices = []
+        self.current_card = None
 
     def reset(self):
         self.has_revealed = False

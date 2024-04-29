@@ -14,3 +14,13 @@ class Icon(Enum):
 
     def __str__(self):
         return self.value[0]
+
+class TurnType(Enum):
+    AGENT = "Agent"
+    REVEAL = "Reveal"
+
+
+class ChoiceType(Enum):
+    BOOLEAN = 'bool'
+    LOCATION = 'Location'
+    CARD = 'Card'

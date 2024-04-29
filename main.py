@@ -4,14 +4,25 @@ from transitions import Machine, Transition
 from typing import Callable, List, Dict
 from functools import partialmethod, partial
 
+import Effect
 import demo_player as dp
 import demo_game as dg
+import demo_board as db
 import demo_cards as dc
+from enums import ChoiceType
+
 
 
 if __name__ == '__main__':
     max_troops = 12
     players = 4
+
+
+    # ToDo: find out how to make transitions work with player change
+    # ToDo: Evaluate Location Effects separately
+
+    choices = []
+    choices.append((ChoiceType.BOOLEAN, [True, False]))
 
 
     def generate_transitions(game: 'Game') -> List[Dict]:
@@ -53,9 +64,10 @@ if __name__ == '__main__':
                             'after': partial(game.current_player.buy, card)}
                            for card in game.cards]
         transitions.extend(shop_transition)
-        transitions.append({'trigger': 'buy', 'source': 'Revealed', 'dest': 'Shop', 'conditions': partial(lambda: not game.current_player.has_hand_cards)})
+        transitions.append({'trigger': 'buy', 'source': 'Revealed', 'dest': 'Shop',
+                            'conditions': partial(lambda: not game.current_player.has_hand_cards)})
         # Garrison
-        possible_troop_counts = list(range(-max_troops, max_troops+1))
+        possible_troop_counts = list(range(-max_troops, max_troops + 1))
         possible_troop_counts.remove(0)
         transitions.extend(
             [
@@ -86,7 +98,8 @@ if __name__ == '__main__':
                  'source': 'Pick Card',
                  'dest': 'Pick Location',
                  'conditions': partial(game.current_player.is_playable_card, card),
-                 'after': partial(game.current_player.pick_card, card)}
+                 'after': partial(game.current_player.pick_choice_card, card)
+                 }
                 for card in game.cards  # trivial cards
             ]
         )
@@ -95,19 +108,19 @@ if __name__ == '__main__':
             [
                 {'trigger': f'location_{location.name}',
                  'source': 'Pick Location',
-                 'dest': 'Card Played',
+                 'dest': 'Choicing',
                  'conditions': partial(game.current_player.location_available, location),
-                 'after': partial(game.current_player.play_current_card_and_occupy, location)}
+                 'after': partial(game.current_player.pick_location, location)}
                 for location in game.locations  # trivial cards
             ]
         )
-
         # Reveal
         transitions.extend(
             [
                 {'trigger': 'reveal', 'source': 'start', 'dest': 'Revealing',
                  'conditions': lambda: not game.current_player.has_revealed, 'after': game.current_player.reveal},
-                {'trigger': 'done_reveal', 'source': 'Revealing', 'dest': 'Revealed', 'conditions': lambda: not game.current_player.has_hand_cards()}
+                {'trigger': 'done_reveal', 'source': 'Revealing', 'dest': 'Revealed',
+                 'conditions': lambda: not game.current_player.has_hand_cards()}
             ]
         )
         transitions.extend(
@@ -133,6 +146,52 @@ if __name__ == '__main__':
             ]
         )
 
+        # (StartNode, EndNode, EffectType)
+        agent_effect_types = [('Binary Decision', 'Binary Decision', Effect.BinaryDecisionEffectWithRequirement)]
+        transitions.append(
+            {'trigger': 'trivial_effect',
+             'source': 'Evaluate Effect',
+             'dest': 'Card Played',
+             'conditions': lambda: game.current_player.is_playing_trivial_card(),
+             'after': lambda: game.current_player.play_current_card()}
+        )
+        transitions.extend(
+            [
+                {'trigger': 'decide_effect',
+                 'source': 'Evaluate Effect',
+                 'dest': effect_start_node,
+                 'conditions': lambda: game.current_player.current_card.agent_effect.__class__ == effect_type}
+                for effect_start_node, _, effect_type in agent_effect_types
+            ]
+        )
+        transitions.extend(
+            [
+                {'trigger': 'effect_done',
+                 'source': effect_end_node,
+                 'dest': 'Card Played',
+                 'conditions': lambda: game.current_player.current_card != None}
+                for effect_start_node, effect_end_node, _ in agent_effect_types
+            ]
+        )
+
+        for choice_type, choice_list in choices:
+            transitions.extend([
+                {'trigger': f'choice_{choice}',
+                 'source': 'Choicing',
+                 'dest': '=',
+                 'conditions': lambda: game.current_player.has_choices() and  game.current_player.can_make_choice(choice, choice_type),
+                 'after': lambda: game.current_player.make_choice(choice)}
+                for choice in choice_list
+            ])
+        transitions.append(
+            {'trigger': f'evaluate_choices',
+             'source': 'Choicing',
+             'dest': 'Card Played',
+             'conditions': lambda: not game.current_player.has_choices(),
+             'after': lambda: game.current_player.evaluate_choices()}
+        )
+
+
         return transitions
 
 
@@ -140,11 +199,11 @@ if __name__ == '__main__':
     machine = GraphMachine(
         name="player_turn",
         model=game,
-        states=['start', 'Pick Card', 'Pick Location', 'Pick Plot', 'Card Played', 'Revealing', 'Shop', 'Revealed',
-                'end'],
+        states=['start', 'Pick Card', 'Pick Location', 'Pick Plot', 'Card Played', 'Revealing', 'Choicing', 'Shop', 'Revealed',
+                'end', 'Evaluate Effect'],
         initial='start',
         transitions=generate_transitions(game) + [
-            {'trigger': 'back', 'source': 'end', 'dest': 'start', 'after': partial(game.current_player.reset) },
+            {'trigger': 'back', 'source': 'end', 'dest': 'start', 'after': partial(game.current_player.reset)},
         ],
     )
     game.set_game_machine(machine)
