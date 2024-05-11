@@ -2,19 +2,18 @@ from transitions import Machine
 from typing import List, Set, ClassVar, Any
 import random
 
-from demo_cards import BinaryDecisionEffectWithRequirement
-from enums import Icon, TurnType
+from enums import Icon, TurnType, Faction
 import Effect
 
 class Player(object):
 
     def __init__(self, game: 'Game'):
 
-        self.money: int = 20
+        self.solari: int = 20
         self.spice: int = 20
         self.game: 'Game' = game
         self.hand_cards: List['Card'] = self.game.cards
-        self.hand_plot_cards: List['Card'] = self.game.plots[:-1]
+        self.hand_plot_cards: List['Card'] = self.game.plots
         self.has_revealed: bool = False
         self.discard_pile: List['Card'] = []
         self.garrison: int = 2
@@ -29,6 +28,13 @@ class Player(object):
         self.current_location: 'Location' = None
         self.open_choices: List[Any] = []
         self.decided_choices: List[Any] = []
+        self.current_plot = None
+        self.open_location_choices: List[Any] = []
+        self.decided_location_choices: List[Any] = []
+        self.current_choicing: str = None
+        self.influence = {faction: 6 for faction in Faction}
+        self.influence[Faction.FREMEN] = 0
+
 
     def has_playable_card_with_agent_effect(self, effect_type: ClassVar):
         for card in self.hand_cards:
@@ -41,6 +47,22 @@ class Player(object):
                     return True
         return False
 
+
+    def get_influence_increase_possible_for(self, n):
+       return set(map(lambda t: t[0] ,filter(lambda faction:  faction[1] + n <= self.game.max_influence, self.influence.items())))
+    def change_influence(self, faction: Faction, n: int):
+        if self.influence[faction] + n > self.game.max_influence:
+            raise Exception("Influence cap surpassed!")
+        if self.influence[faction] + n < 0:
+            raise Exception("Influence cannot be negative!")
+        self.influence[faction] += n
+        if n > 0:
+            print(f"+{faction}: {n}")
+        else:
+            print(f"-{faction}: {n}")
+
+    def add_icons(self, icons: List[Icon]):
+        self.icons.update(icons)
     def draw(self):
         if len(self.deck) == 0:
             random.shuffle(self.discard_pile)
@@ -49,6 +71,9 @@ class Player(object):
         card = self.deck.pop()
         self.hand_cards.append(card)
 
+    def change_spice_solari(self, spice: int, solari: int):
+        self.change_spice(spice)
+        self.change_solari(solari)
     def change_spice(self, n: int):
         self.spice += n
         if n > 0:
@@ -56,8 +81,8 @@ class Player(object):
         else:
             print(f"-Spice: {n}")
 
-    def change_money(self, n: int):
-        self.money += n
+    def change_solari(self, n: int):
+        self.solari += n
         if n > 0:
             print(f"+Money: {n}")
         else:
@@ -109,59 +134,37 @@ class Player(object):
         return self.last_state == state
 
     def can_buy(self, card: 'Card'):
-        return self.money >= card.cost and card in self.game.shop
+        return self.solari >= card.cost and card in self.game.shop
 
     def buy(self, card: 'Card'):
-        self.money -= card.cost
+        self.solari -= card.cost
         self.game.shop.remove(card)
         self.hand_cards.append(card)
 
 
+    def reveal_current_card(self):
+        self.current_card = self.hand_cards.pop()
+        self.open_choices = self.current_card.reveal_effect.choices
+
+
     def reveal(self):
         self.has_revealed = True
-        # reveal trivial cards
-        trivial_reveal = list(filter(lambda card: card.reveal_effect.__class__ != BinaryDecisionEffectWithRequirement, self.hand_cards))
-        [card.reveal_effect.execute(self.game) for card in trivial_reveal]
-        self.played_cards.extend(trivial_reveal)
-        [self.hand_cards.remove(card) for card in trivial_reveal]
-        # reveal decision cards that are not allowed to be decided positively
-        for card in self.hand_cards:
-            effect: BinaryDecisionEffectWithRequirement = card.reveal_effect
-            if not effect.decision_possible(self.game):
-                self.played_cards.append(card)
-                card.reveal_effect.execute(self.game)
-                self.hand_cards.remove(card)
+        self.current_choicing = 'reveal'
 
-    def make_reveal_decision(self, card: 'Card', decision: bool):
-        effect: BinaryDecisionEffectWithRequirement = card.reveal_effect
-        effect.execute_decision(self.game, decision)
-        self.played_cards.append(card)
-        self.hand_cards.remove(card)
-        self.current_card = None
-
-    def can_make_reveal_decision(self, card: 'Card'):
-        if card not in self.hand_cards:
-            return False
-        return card.reveal_effect.decision_possible(self.game) and card == self.hand_cards[0]
-
+    def done_reveal(self):
+        self.current_choicing = None
 
     def can_return_to_by_plot(self, plot: 'PlotIntrigue', state: str):
         return self.plot_is_playable(plot) and self.was_last_state(state)
+
+    def reset_last_state(self):
+        self.last_state = None
     def plot_is_playable(self, plot: 'PlotIntrigue'):
-        return plot.is_playable(self.game) and plot in self.hand_plot_cards
+        if not plot in self.hand_plot_cards:
+            return False
+        return plot.requirement.is_met(self.game)
 
-    def play_plot(self, plot: 'PlotIntrigue'):
-        plot.play(self.game)
-        self.hand_plot_cards.remove(plot)
 
-    def pick_card(self, card: 'Card'):
-        self.current_card = card
-        self.hand_cards.remove(card)
-        self.played_cards.append(card)
-
-    def pick_location(self, location: 'Location'):
-        self.current_location = location
-        location.occupy(self.game)
 
     def is_playing_trivial_card(self):
         return self.current_card.agent_effect.__class__ == Effect.Effect
@@ -173,15 +176,9 @@ class Player(object):
 
     def has_playable_plot(self):
         for plot in self.hand_plot_cards:
-            if plot.is_playable(self.game):
+            if plot.requirement.is_met(self.game):
                 return True
         return False
-
-
-    def pick_card(self, card: 'Card'):
-        self.current_card = card
-        self.hand_cards.remove(card)
-        self.played_cards.append(card)
 
     def set_last_state(self, state: str):
         self.last_state = state
@@ -192,7 +189,9 @@ class Player(object):
                 return True
         return False
     def location_available_for_card(self, location: 'Location', card: 'Card'):
-            return location.requirement.is_met(self.game) and len(location.icons.intersection(card.icons.union(self.icons))) != 0 and not location.is_occupied
+            return (location.requirement.is_met(self.game)
+                    and len(location.icons.intersection(card.icons.union(self.icons))) != 0
+                    and not location.is_occupied)
     def location_available(self, location: 'Location'):
         return location.requirement.is_met(self.game) and not location.is_occupied
 
@@ -204,32 +203,12 @@ class Player(object):
                 return True
         return False
 
-    def pick_choice_card(self, card: 'Card'):
-        self.current_card = card
-        self.open_choices = card.agent_effect.choices
-        self.hand_cards.remove(card)
-    def has_choices(self):
-        return len(self.open_choices) != 0
-    def has_no_choices(self):
-        return not self.has_choices()
-    def can_make_choice(self, choice: Any, choice_type: 'ChoiceType'):
-        if len(self.open_choices) == 0:
-            return False
-        return self.open_choices[0].is_allowed(choice, choice_type, self.game)
-    def make_choice(self, choice: Any):
-        self.open_choices = self.open_choices[1:]
-        self.decided_choices.append(choice)
-    def evaluate_choices(self):
-        self.current_card.agent_effect.execute(self.game, self.decided_choices)
-        self.decided_choices = []
-        self.current_card = None
-
     def reset(self):
         self.has_revealed = False
         self.to_deploy = 0
         self.in_combat = 0
         self.current_card = None
-        self.icons = []
+        self.icons = set()
         self.discard_pile.extend(self.played_cards)
         self.played_cards = []
         self.to_retreat = 0
@@ -237,6 +216,103 @@ class Player(object):
         if self.has_revealed and len(self.hand_cards) != 0:
             raise Exception("Player still has cards in hand after turn!")
 
+        self.draw()
+        self.draw()
 
-        self.draw()
-        self.draw()
+    # Picking
+    def pick_plot(self, plot: 'PlotIntrigue'):
+        self.current_plot = plot
+        self.hand_plot_cards.remove(plot)
+        self.open_choices = plot.effect.choices
+        self.current_choicing = 'plot'
+
+    def pick_card(self, card: 'Card'):
+        self.current_card = card
+        self.hand_cards.remove(card)
+        self.played_cards.append(card)
+        self.open_choices = card.agent_effect.choices
+        self.icons.update(card.icons)
+
+    def pick_location(self, location: 'Location'):
+        self.current_location = location
+        self.open_location_choices = location.effect.choices
+        location.occupy()
+        location.requirement.fulfill(self.game)
+        if len(location.effect.choices) != 0:
+            self.current_choicing = 'location'
+        else:
+            self.current_choicing = 'agent'
+
+    # Choicing
+    def has_choices(self):
+        return len(self.open_choices) != 0
+    def has_no_choices(self):
+        return len(self.open_choices)== 0
+    def has_location_choices(self):
+        return len(self.open_location_choices) != 0
+    def has_no_location_choices(self):
+        return len(self.open_location_choices) == 0
+
+    def can_evaluate_plot(self):
+        return self.has_no_choices() and self.current_choicing == 'plot'
+    def can_evaluate_reveal(self):
+        return self.has_no_choices() and self.current_choicing == 'reveal'
+    def can_evaluate_agent_location(self):
+        return self.has_no_choices() and self.has_no_location_choices() and self.current_choicing == 'agent'
+
+    def can_make_choice(self, choice: Any, choice_type: 'ChoiceType'):
+        if len(self.open_choices) == 0 or self.current_choicing == 'location':
+            return False
+        return self.open_choices[0].is_allowed(choice, choice_type, self.game)
+
+    def can_make_location_choice(self, choice: Any, choice_type: 'ChoiceType'):
+        if len(self.open_location_choices) == 0 or self.current_choicing != 'location':
+            return False
+        return self.open_location_choices[0].is_allowed(choice, choice_type, self.game)
+
+
+    def make_choice(self, choice: Any):
+        evaluated_choice = self.open_choices[0]
+        self.decided_choices.append(choice)
+
+        if evaluated_choice.triggers_break(self.game):
+            self.open_choices = []
+        else:
+            self.open_choices = self.open_choices[1:]
+
+    def make_location_choice(self, choice: Any):
+        evaluated_choice = self.open_location_choices[0]
+        self.decided_location_choices.append(choice)
+
+        if evaluated_choice.triggers_break(self.game):
+            self.open_location_choices = []
+        else:
+            self.open_location_choices = self.open_location_choices[1:]
+
+        if self.has_no_location_choices():
+            self.current_choicing = 'agent'
+
+
+    def evaluate_choices_agent_location(self):
+        self.current_card.agent_effect.execute(self.game, self.decided_choices)
+        self.current_location.effect.execute(self.game, self.decided_location_choices)
+        self.played_cards.append(self.current_card)
+        self.current_location.occupy()
+        self.decided_choices = []
+        self.decided_location_choices = []
+        self.current_card = None
+        self.current_location = None
+        self.current_choicing = None
+
+    def evaluate_choices_reveal(self):
+        self.current_card.reveal_effect.execute(self.game, self.decided_choices)
+        self.played_cards.append(self.current_card)
+        self.decided_choices = []
+        self.current_card = None
+
+    def evaluate_choices_plot(self):
+        self.current_plot.effect.execute(self.game, self.decided_choices)
+        self.current_plot = None
+        self.current_choicing = None
+        self.reset_last_state()
+

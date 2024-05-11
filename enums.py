@@ -3,10 +3,15 @@ from enum import Enum
 class Faction(Enum):
     IMPERIUM = "Imperium"
     FREMEN = "Fremen"
+    SPACING_GUILD = "Spacing Guild"
+    BENE_GESSERIT = "Bene Gesserit"
+    # NO_FACTION = "No Faction"
 
 class Icon(Enum):
     IMPERIUM = "Imperium"
     FREMEN = "Fremen"
+    SPACING_GUILD = "Spacing Guild"
+    BENE_GESSERIT = "Bene Gesserit"
     DESERT = "Desert"
 
     def __repr__(self):
@@ -24,3 +29,5 @@ class ChoiceType(Enum):
     BOOLEAN = 'bool'
     LOCATION = 'Location'
     CARD = 'Card'
+    NUMERIC = 'Numeric'
+    FACTION = 'Faction'

@@ -1,57 +1,59 @@
 from typing import Callable, List, Any
-import Requirement
-class Effect:
-    def __init__(self, effect: Callable[['Game'], None], requirement: 'Requirement' = Requirement.noRequirement):
-        self.effect: Callable[['Game'], None] = effect
-        self.requirement: 'Requirement' = requirement
-
-    def requirement_met(self, game: 'Game'):
-        print(self.requirement.is_met)
-        return self.requirement.is_met(game)
-    def execute(self, game: 'Game'):
-        if not self.requirement_met(game):
-            raise Exception("Requirement not met, but tried to execute")
-        self.effect(game)
-        self.requirement.fulfill(game)
-        self.effect(game)
-
-noEffect = Effect(lambda game: None)
-
-class BinaryDecisionEffectWithRequirement(Effect):
-    def __init__(self, effect: Callable[['Game'], None], requirement: 'Requirement', decision_effect: Callable[['Game'], None]):
-        super().__init__(effect)
-        self.requirement: 'Requirement' = requirement
-        self.decision_effect: Callable[['Game'], None] = decision_effect
-
-    def decision_possible(self, game: 'Game'):
-        return self.requirement.is_met(game)
-    def execute_decision(self, game: 'Game', decision: bool):
-        self.execute(game) # applying standard effect. Will mostly be empty
-        if decision:
-            self.requirement.fulfill(game)
-            self.decision_effect(game)
-
-class EffectWithChoice(Effect):
-    def __init__(self, effect: Callable[['Game'], None], requirement: 'Requirement', choices: List[Callable[['Game'], None]]):
-        super().__init__(effect, requirement)
-        self.choices: List[Callable[['Game'], None]] = choices
-
-    def decision_possible(self, game: 'Game'):
-        return self.requirement.is_met(game)
-    def execute_decision(self, game: 'Game', decision: int):
-        self.execute(game) # applying standard effect. Will mostly be empty
-        self.choices[decision](game)
-
-class EffectWithChoices():
-    def __init__(self, effect: Callable[['Game', List[Any]], None], choices: List[Requirement.Choice]):
-        self.effect = effect
-        self.choices: List[Requirement] = choices
+from enums import ChoiceType
+from Requirement import Choice
+class Effect():
+    def __init__(self, effect: Callable[['Game', List[Any]], None], choices: List[Choice] = []):
+        self.effect:  Callable[['Game', List[Any]], None] = effect
+        self.choices: List[Choice] = choices
 
     def execute(self, game: 'Game', decisions: List[Any]):
+        if len(decisions) != len(self.choices):
+            diff = len(self.choices) - len(decisions)
+            decisions.extend([None] * diff)
         self.effect(game, *decisions)
 
 
-    """
-    TODO:
-        the general Class used for cards should be EffectWithChoices
-    """
+class ChoicelessEffect(Effect):
+    def __init__(self, effect: Callable[['Game'], None]):
+        super().__init__(effect, [])
+
+    def execute(self, game: 'Game', decisions: List[Any]):
+        self.effect(game)
+
+def _swappero_effect(game):
+    dspice = game.current_player.solari - game.current_player.spice
+    dmoney = game.current_player.spice - game.current_player.solari
+    game.current_player.change_spice(dspice)
+    game.current_player.change_solari(dmoney)
+
+class SpiceEffect(ChoicelessEffect):
+    def __init__(self, n: int):
+        super().__init__(lambda game: game.current_player.change_spice(n))
+
+class MoneyEffect(ChoicelessEffect):
+    def __init__(self, n: int):
+        super().__init__(lambda game: game.current_player.change_solari(n))
+
+class GarrisonEffect(ChoicelessEffect):
+    def __init__(self, n: int):
+        super().__init__(lambda game: game.current_player.change_garrison(n))
+
+
+
+noEffect = ChoicelessEffect(lambda game: None)
+swappero_effect = ChoicelessEffect(_swappero_effect)
+bin_choice = Effect(lambda game, decision: game.current_player.change_solari(2) if decision else game.current_player.change_spice(2),
+                    choices=[Choice(
+                        ChoiceType.BOOLEAN,
+                        lambda game, decision:
+                            True if decision
+                            else game.current_player.solari > game.current_player.spice)])
+
+
+spice_trade = Effect(
+    effect=lambda game, decision: game.current_player.change_spice_solari(2 - decision, 6 + (2 * (decision - 2))),
+    choices=[Choice(
+        choice_type=ChoiceType.NUMERIC,
+        condition=lambda game, decision: decision in [2,3,4,5] and game.current_player.spice >= decision
+    )]
+)

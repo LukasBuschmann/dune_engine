@@ -15,13 +15,19 @@ class Requirement:
 noRequirement = Requirement(lambda game: True, lambda game: None)
 
 class Choice:
-    def __init__(self, choice_type: 'ChoiceType', condition: Callable[['Game', 'Any'], bool]):
+    def __init__(self, choice_type: 'ChoiceType', condition: Callable[['Game', 'Any'], bool],  break_condition: Callable[['Game'], bool] = lambda game: False):
         self.choice_type = choice_type
         self.condition = condition
+        self.break_condition = break_condition
+    def triggers_break(self, game: 'Game'):
+        return self.break_condition(game)
     def is_allowed(self, choice: Any, choice_type: 'ChoiceType', game: 'Game'):
         if not self.choice_type is choice_type:
             return False
         return self.condition(game, choice)
+
+    def __repr__(self):
+        return self.choice_type.name
 
 
 class SpiceRequirement(Requirement):

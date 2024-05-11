@@ -1,11 +1,8 @@
 from typing import Callable, List, Set
 
 from enums import Icon, ChoiceType
-from Effect import Effect, BinaryDecisionEffectWithRequirement, noEffect, EffectWithChoices
+from Effect import Effect, swappero_effect, noEffect
 from Requirement import Requirement, SpiceRequirement, noRequirement, Choice
-
-
-
 
 
 class Card:
@@ -27,129 +24,92 @@ class Card:
         self.removal_effect: Effect = removal_effect
         self.acquisition_effect: Effect = acquisition_effect
 
-    def play(self, game: 'Game'):
-        self.agent_effect.execute(game)
-
-    def reveal(self, game: 'Game'):
-        self.reveal_effect.execute(game)
-
     def __repr__(self):
         return self.name + str(self.icons)
 
 
-class CardV2:
-    def __init__(self,
-                 name: str,
-                 persuasion_cost: int = 0,
-                 icons: Set[Icon] = {Icon.IMPERIUM, Icon.DESERT, Icon.FREMEN},
-                 factions: List[str] = ['all'],
-                 agent_effect: EffectWithChoices = noEffect,
-                 reveal_effect: Effect = noEffect,
-                 removal_effect: Effect = noEffect,
-                 acquisition_effect: Effect = noEffect):
-        self.name: str = name
-        self.persuasion_cost: int = persuasion_cost
-        self.icons: Set[Icon] = icons
-        self.factions: List[str] = factions
-        self.agent_effect: EffectWithChoices = agent_effect
-        self.reveal_effect: Effect = reveal_effect
-        self.removal_effect: Effect = removal_effect
-        self.acquisition_effect: Effect = acquisition_effect
-    def __repr__(self):
-        return self.name + str(self.icons)
+def choice(game, decision):
+    if decision == True:
+        if game.current_player.solari > game.current_player.spice:
+            return True
+        else:
+            return False
+    elif decision == False:
+        if game.current_player.solari <= game.current_player.spice:
+            return True
+        else:
+            return False
 
+def helper(game, faction):
+    print(faction)
+    print(game.current_player.get_influence_increase_possible_for(1))
+    return True if faction in game.current_player.get_influence_increase_possible_for(1) else False
 
-
-cardsV2 = [
-    # CardV2(
-    #     name="Option Master",
-    #     agent_effect=EffectWithChoices(
-    #         effect=lambda game, decision: game.current_player.change_money(2) if decision else game.current_player.change_spice(2),
-    #         choices=[Choice(ChoiceType.BOOLEAN, lambda game, decision: True)]
-    #     )
-    # ),
-    CardV2(
-            name="Average No-Choicer",
-            agent_effect=EffectWithChoices(
-                effect = lambda game: game.current_player.change_money(2),
-                choices=[]
-            )
+cards = [
+    Card(
+        name="Option Master",
+        agent_effect=Effect(
+            effect=lambda game, decision: game.current_player.change_solari(
+                2) if decision else game.current_player.change_spice(2),
+            choices=[Choice(ChoiceType.BOOLEAN, lambda game, decision: choice(game, decision))]
         ),
+        reveal_effect=Effect(
+            effect=lambda game: game.current_player.change_spice(2),
+        )
+    ),
+    Card(
+        name="Average No-Choicer",
+        agent_effect=Effect(
+            effect=lambda game: game.current_player.change_solari(2),
+            choices=[]
+        )
+    ),
+
+
+
+    Card(
+        name="Firm Grip",
+        agent_effect=Effect(
+            effect=lambda game, activated, faction: (
+                game.current_player.change_solari(-2),
+                game.current_player.change_influence(faction, 1)
+            ) if activated else None,
+            choices=[
+                Choice(
+                    choice_type=ChoiceType.BOOLEAN,
+                    condition=lambda game, decision: True if (game.current_player.solari >= 2 and game.current_player.get_influence_increase_possible_for(1)) or decision is False else False,
+                    break_condition = lambda game: game.current_player.decided_choices[-1] is False),
+                Choice(
+                    choice_type=ChoiceType.FACTION,
+                    condition=lambda game, faction: helper(game, faction))
+            ],
+
+        ),
+    )
 ]
 
 
-
 class PlotIntrigue:
-    def __init__(self, name: str, effect: Callable[['Game'], None], requirements: Callable[['Game'], bool]):
+    def __init__(self, name: str, effect: Effect, requirement: Requirement = noRequirement):
         self.name: str = name
-        self.effect: Callable[['Game'], None] = effect
-        self.requirements: Callable[['Game'], bool] = requirements
-
-    def play(self, game: 'Game'):
-        self.effect(game)
-
-    def is_playable(self, game: 'Game'):
-        return self.requirements(game)
+        self.effect: Effect = effect
+        self.requirement: Requirement = requirement
 
     def __repr__(self):
         return self.name
 
 
-money_effect = Effect(lambda game: game.current_player.change_money(2))
-spice_effect = Effect(lambda game: game.current_player.change_spice(2))
-decision_effect = BinaryDecisionEffectWithRequirement(lambda game: game.current_player.change_to_deploy(1),
-                                                      SpiceRequirement(3),
-                                                      lambda game: game.current_player.change_garrison(3))
-
-cards = [
-    Card("Spice Addict", reveal_effect=money_effect, icons={Icon.FREMEN}),
-    Card("Everywhere Joe"),
-    Card("Decisive General", reveal_effect=decision_effect),
-    Card("Trader", agent_effect=spice_effect, icons={Icon.IMPERIUM}),
-]
-
-def swappero_effect(game):
-    dspice = game.current_player.money - game.current_player.spice
-    dmoney = game.current_player.spice - game.current_player.money
-    game.current_player.change_spice(dspice)
-    game.current_player.change_money(dmoney)
-
-
 plots = [
-    PlotIntrigue("Swappero",  swappero_effect, lambda game: True),
-    PlotIntrigue("Spice_Harvest",  lambda game: game.current_player.change_money(1), lambda game: game.current_player.money >= 3),
+    PlotIntrigue("Swappero", swappero_effect, noRequirement),
+    PlotIntrigue(
+        "Dispatch an Envoy ",
+        Effect(
+            effect=lambda game: game.current_player.add_icons(
+                [Icon.IMPERIUM, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN])
+        )
+    )
 ]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 """
 TODO:
 """
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
