@@ -1,7 +1,7 @@
 from typing import Callable, List, Set
 
-from enums import Icon, ChoiceType
-from Effect import Effect, swappero_effect, noEffect
+from enums import Icon, ChoiceType, Faction
+from Effect import Effect, swappero_effect, noEffect, ChoicelessEffect
 from Requirement import Requirement, SpiceRequirement, noRequirement, Choice
 
 
@@ -9,7 +9,7 @@ class Card:
     def __init__(self,
                  name: str,
                  persuasion_cost: int = 0,
-                 icons: Set[Icon] = {Icon.IMPERIUM, Icon.DESERT, Icon.FREMEN},
+                 icons: Set[Icon] = {Icon.IMPERIUM, Icon.ECONOMY, Icon.FREMEN},
                  factions: List[str] = ['all'],
                  agent_effect: Effect = noEffect,
                  reveal_effect: Effect = noEffect,
@@ -40,10 +40,6 @@ def choice(game, decision):
         else:
             return False
 
-def helper(game, faction):
-    print(faction)
-    print(game.current_player.get_influence_increase_possible_for(1))
-    return True if faction in game.current_player.get_influence_increase_possible_for(1) else False
 
 cards = [
     Card(
@@ -65,10 +61,11 @@ cards = [
         )
     ),
 
-
-
     Card(
         name="Firm Grip",
+        persuasion_cost=4,
+        icons={Icon.IMPERIUM, Icon.STATECRAFT},
+        factions=[Faction.EMPEROR],
         agent_effect=Effect(
             effect=lambda game, activated, faction: (
                 game.current_player.change_solari(-2),
@@ -77,14 +74,21 @@ cards = [
             choices=[
                 Choice(
                     choice_type=ChoiceType.BOOLEAN,
-                    condition=lambda game, decision: True if (game.current_player.solari >= 2 and game.current_player.get_influence_increase_possible_for(1)) or decision is False else False,
-                    break_condition = lambda game: game.current_player.decided_choices[-1] is False),
+                    condition=lambda game, decision: True if (
+                                                                         game.current_player.solari >= 2 and game.current_player.get_influence_increase_possible_for(
+                                                                     1)) or decision is False else False,
+                    break_condition=lambda game: game.current_player.decided_choices[-1] is False),
                 Choice(
                     choice_type=ChoiceType.FACTION,
-                    condition=lambda game, faction: helper(game, faction))
+                    condition=lambda game,
+                                     faction: True if faction in game.current_player.get_influence_increase_possible_for(
+                        1).intersection(
+                        {Faction.SPACING_GUILD, Faction.BENE_GESSERIT, Faction.FREMEN}) else False)
             ],
-
         ),
+        reveal_effect=ChoicelessEffect(
+            effect=lambda game: game.current_player.change_persuation(4) if game.current_player.has_alliance(Faction.EMPEROR) else None
+        )
     )
 ]
 

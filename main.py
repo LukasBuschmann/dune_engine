@@ -20,6 +20,9 @@ if __name__ == '__main__':
 
     def generate_transitions(game: 'Game') -> List[Dict]:
 
+        def cp(game, function_on_cp):
+            return function_on_cp(game.current_player)
+
         choices = []
         choices.append((ChoiceType.BOOLEAN, [True, False]))
         choices.append((ChoiceType.FACTION, [faction for faction in Faction]))
@@ -35,19 +38,19 @@ if __name__ == '__main__':
                 {'trigger': 'end_turn', 'source': 'Shop', 'dest': 'end', },
                 {'trigger': 'end_turn', 'source': 'Revealed', 'dest': 'end'},
                 {'trigger': 'end_turn', 'source': 'start', 'dest': 'end',
-                 'conditions': lambda: game.current_player.has_revealed},
+                 'conditions': lambda: game.current_player.has_revealed()},
             ]
         )
         # Shop
         shop_transition = [{'trigger': f'buy_{card.name}',
                             'source': 'Shop',
                             'dest': 'Shop',
-                            'conditions': partial(game.current_player.can_buy, card),
-                            'after': partial(game.current_player.buy, card)}
+                            'conditions': partial(lambda _card: game.current_player.can_buy(_card), card),
+                            'after': partial(lambda _card: game.current_player.buy(_card), card)}
                            for card in game.cards]
         transitions.extend(shop_transition)
         transitions.append({'trigger': 'buy', 'source': 'Revealed', 'dest': 'Shop',
-                            'conditions': partial(lambda: not game.current_player.has_hand_cards)})
+                            'conditions': lambda: not game.current_player.has_hand_cards()})
         # Garrison
         possible_troop_counts = list(range(-game.max_troops, game.max_troops + 1))
         possible_troop_counts.remove(0)
@@ -56,8 +59,8 @@ if __name__ == '__main__':
                 {'trigger': f'deploy_{i}',
                  'source': ['start', 'Revealed', 'Shop'],
                  'dest': '=',
-                 'conditions': partial(game.current_player.can_change_troop_count, i),
-                 'after': partial(game.current_player.deploy, i)}
+                 'conditions': partial(lambda _i: game.current_player.can_change_troop_count(_i), i),
+                 'after': partial(lambda _i: game.current_player.deploy(_i), i)}
                 for i in possible_troop_counts
             ]
         )
@@ -67,7 +70,7 @@ if __name__ == '__main__':
                 {'trigger': f'agent_turn',
                  'source': 'start',
                  'dest': 'Pick Card',
-                 'conditions': partial(game.current_player.has_playable_card)},
+                 'conditions': lambda: game.current_player.has_playable_card()},
                 {'trigger': f'end_turn',
                  'source': 'Card Played',
                  'dest': 'end'},
@@ -78,8 +81,8 @@ if __name__ == '__main__':
             [{'trigger': 'plot',
               'source': plotable_state,
               'dest': 'Pick Plot',
-              'conditions': game.current_player.has_playable_plot,
-              'after': partial(game.current_player.set_last_state, plotable_state)
+              'conditions': lambda: game.current_player.has_playable_plot(),
+              'after': partial(lambda _plotable_state: game.current_player.set_last_state(_plotable_state), plotable_state)
               } for plotable_state in plotable_states]
         )
         # pick Card
@@ -88,8 +91,8 @@ if __name__ == '__main__':
                 {'trigger': f'card_{card.name}',
                  'source': 'Pick Card',
                  'dest': 'Pick Location',
-                 'conditions': partial(game.current_player.is_playable_card, card),
-                 'after': partial(game.current_player.pick_card, card)
+                 'conditions': partial(lambda _card: game.current_player.is_playable_card(_card), card),
+                 'after': partial(lambda _card: game.current_player.pick_card(card), card)
                  }
                 for card in game.cards  # trivial cards
             ]
@@ -100,8 +103,8 @@ if __name__ == '__main__':
                 {'trigger': f'location_{location.name}',
                  'source': 'Pick Location',
                  'dest': 'Choicing',
-                 'conditions': partial(game.current_player.location_available, location),
-                 'after': partial(game.current_player.pick_location, location)}
+                 'conditions': partial(lambda _location: game.current_player.location_available(_location), location),
+                 'after': partial(lambda _location: game.current_player.pick_location(_location), location)}
                 for location in game.locations  # trivial cards
             ]
         )
@@ -111,8 +114,8 @@ if __name__ == '__main__':
                 'trigger': f'plot_{plot.name}',
                 'source': 'Pick Plot',
                 'dest': 'Choicing',
-                'conditions': partial(game.current_player.plot_is_playable, plot),
-                'after': partial(game.current_player.pick_plot, plot)
+                'conditions': partial(lambda _plot: game.current_player.plot_is_playable(_plot), plot),
+                'after': partial(lambda _plot: game.current_player.pick_plot(_plot), plot)
             } for plot in game.plots])
         # Reveal
         transitions.extend(
@@ -121,29 +124,29 @@ if __name__ == '__main__':
                     'trigger': 'reveal',
                     'source': 'start',
                     'dest': 'Revealing',
-                    'conditions': lambda: not game.current_player.has_revealed,
-                    'after': game.current_player.reveal
+                    'conditions': lambda: not game.current_player.has_revealed(),
+                    'after': lambda: game.current_player.reveal()
                 },
                 {
                     'trigger': 'done_reveal',
                     'source': 'Revealing',
                     'dest': 'Revealed',
                     'conditions': lambda: not game.current_player.has_hand_cards(),
-                    'after': partial(game.current_player.done_reveal)
+                    'after': lambda: game.current_player.done_reveal()
                 },
                 {
                     'trigger': 'decide_card',
                     'source': 'Revealing',
                     'dest': 'Choicing',
-                    'conditions': game.current_player.has_hand_cards,
-                    'after': game.current_player.reveal_current_card
+                    'conditions': partial(lambda: game.current_player.has_hand_cards()),
+                    'after': lambda: game.current_player.reveal_current_card()
                 },
                 {
                     'trigger': 'evaluate_choices_reveal',
                     'source': 'Choicing',
                     'dest': 'Revealing',
-                    'conditions': partial(game.current_player.can_evaluate_reveal),
-                    'after': game.current_player.evaluate_choices_reveal
+                    'conditions': lambda: game.current_player.can_evaluate_reveal(),
+                    'after': lambda: game.current_player.evaluate_choices_reveal()
                 },
             ]
         )
@@ -152,8 +155,8 @@ if __name__ == '__main__':
             [{'trigger': 'evaluate_choices_plot',
               'source': 'Choicing',
               'dest': plotable_state,
-              'conditions': partial(game.current_player.can_evaluate_plot ),
-              'after': partial(game.current_player.evaluate_choices_plot)
+              'conditions': lambda: game.current_player.can_evaluate_plot(),
+              'after': lambda: game.current_player.evaluate_choices_plot()
               } for plotable_state in plotable_states]
         )
         # Choices
@@ -162,8 +165,8 @@ if __name__ == '__main__':
                 {'trigger': f'choice_{choice}',
                  'source': 'Choicing',
                  'dest': '=',
-                 'conditions': partial(game.current_player.can_make_choice, choice, choice_type),
-                 'after': partial(game.current_player.make_choice, choice)}
+                 'conditions': partial(lambda _choice, _choice_type: game.current_player.can_make_choice(_choice, _choice_type), choice, choice_type),
+                 'after': partial(lambda _choice: game.current_player.make_choice(_choice), choice)}
                 for choice in choice_list
             ])
         # Location Choices
@@ -172,15 +175,15 @@ if __name__ == '__main__':
                 {'trigger': f'loc_choice_{choice}',
                  'source': 'Choicing',
                  'dest': '=',
-                 'conditions': partial(game.current_player.can_make_location_choice, choice, choice_type),
-                 'after': partial(game.current_player.make_location_choice, choice)}
+                 'conditions': partial(lambda _choice, _choice_type: game.current_player.can_make_location_choice(_choice, _choice_type), choice, choice_type),
+                 'after': partial(lambda _choice: game.current_player.make_location_choice(_choice), choice)}
                 for choice in choice_list
             ])
         transitions.append(
             {'trigger': f'evaluate_choices_agent_location',
              'source': 'Choicing',
              'dest': 'Card Played',
-             'conditions': partial(game.current_player.can_evaluate_agent_location),
+             'conditions': lambda: game.current_player.can_evaluate_agent_location(),
              'after': lambda: game.current_player.evaluate_choices_agent_location()}
         )
 
@@ -195,7 +198,7 @@ machine = GraphMachine(
             'end', ],
     initial='start',
     transitions=generate_transitions(game) + [
-        {'trigger': 'back', 'source': 'end', 'dest': 'start', 'after': partial(game.current_player.reset)},
+        {'trigger': 'swap_player', 'source': 'end', 'dest': 'start', 'after': lambda: (game.current_player.reset(), game.advance_player())},
     ],
 )
 game.set_game_machine(machine)

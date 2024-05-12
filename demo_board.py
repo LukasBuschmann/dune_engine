@@ -8,7 +8,7 @@ from enums import Icon
 
 class Location:
     def __init__(self, name: str, requirement: dc.Requirement, effect: dc.Effect,
-                 icons: Set[Icon] = {Icon.IMPERIUM, Icon.DESERT, Icon.FREMEN}):
+                 icons: Set[Icon] = {Icon.IMPERIUM, Icon.ECONOMY, Icon.FREMEN}):
         self.name: str = name
         self.requirement: dc.Requirement = requirement
         self.effect: dc.Effect = effect
@@ -27,7 +27,7 @@ class Location:
 
 
 locations = [
-    Location("Spice Mine", noRequirement, SpiceEffect(2), icons={Icon.IMPERIUM, Icon.DESERT}),
+    Location("Spice Mine", noRequirement, SpiceEffect(2), icons={Icon.IMPERIUM, Icon.ECONOMY}),
     Location("Fremen Outpost", SpiceRequirement(1), GarrisonEffect(2), icons={Icon.FREMEN}),
     Location("Trader's Guild", SpiceRequirement(2), spice_trade),
 ]

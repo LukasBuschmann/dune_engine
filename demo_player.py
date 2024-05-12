@@ -2,39 +2,58 @@ from transitions import Machine
 from typing import List, Set, ClassVar, Any
 import random
 
-from enums import Icon, TurnType, Faction
+from enums import Icon, Faction, Commander
 import Effect
 
 class Player(object):
 
-    def __init__(self, game: 'Game'):
+    def __init__(self, game: 'Game', commander: Commander):
+        self.game: 'Game' = game
+        self.commander: Commander = commander
+
+        self.points = 0
 
         self.solari: int = 20
         self.spice: int = 20
-        self.game: 'Game' = game
-        self.hand_cards: List['Card'] = self.game.cards
-        self.hand_plot_cards: List['Card'] = self.game.plots
-        self.has_revealed: bool = False
-        self.discard_pile: List['Card'] = []
+        self.water: int = 1
+        self.persuasion: int = 0
+
+        self.influence = {faction: 0 for faction in Faction}
+        self.alliances = set()
+
         self.garrison: int = 2
         self.in_combat: int = 0
         self.to_deploy: int = 0
-        self.icons: Set[Icon] = set()
-        self.current_card: 'Card' = None
-        self.last_state: str = None
         self.to_retreat: int = 0
-        self.played_cards: List['Card'] = []
+
+        self.icons: Set[Icon] = set()
+
+        self.current_card: 'Card' = None
+        self.hand_cards: List['Card'] = self.game.cards
+        self.current_plot = None
+        self.hand_plot_cards: List['Card'] = self.game.plots
+
         self.deck: List['Card'] = self.game.cards[-1:]
+        self.played_cards: List['Card'] = []
+        self.discard_pile: List['Card'] = []
+
         self.current_location: 'Location' = None
+        self.revealed: bool = False
+        self.last_state: str = None
+
+        self.current_choicing: str = None
         self.open_choices: List[Any] = []
         self.decided_choices: List[Any] = []
-        self.current_plot = None
         self.open_location_choices: List[Any] = []
         self.decided_location_choices: List[Any] = []
-        self.current_choicing: str = None
-        self.influence = {faction: 6 for faction in Faction}
-        self.influence[Faction.FREMEN] = 0
 
+        self.str_out = ""
+
+
+    def __repr__(self):
+        return self.commander.name
+    def __str__(self):
+        return self.commander.name
 
     def has_playable_card_with_agent_effect(self, effect_type: ClassVar):
         for card in self.hand_cards:
@@ -47,9 +66,14 @@ class Player(object):
                     return True
         return False
 
+    def has_revealed(self):
+        return self.revealed
+    def has_alliance(self, faction: Faction):
+        return faction in self.alliances
 
     def get_influence_increase_possible_for(self, n):
        return set(map(lambda t: t[0] ,filter(lambda faction:  faction[1] + n <= self.game.max_influence, self.influence.items())))
+
     def change_influence(self, faction: Faction, n: int):
         if self.influence[faction] + n > self.game.max_influence:
             raise Exception("Influence cap surpassed!")
@@ -57,10 +81,37 @@ class Player(object):
             raise Exception("Influence cannot be negative!")
         self.influence[faction] += n
         if n > 0:
-            print(f"+{faction}: {n}")
+            self.str_out += '\n' + (f"+{faction}: {n}")
         else:
-            print(f"-{faction}: {n}")
+            self.str_out += '\n' + (f"-{faction}: {n}")
 
+        influence = self.influence[faction]
+        get_alliance = True
+
+        if influence >= 4:
+            for i, player in enumerate(self.game.players):
+                if player is self:
+                    continue
+                if influence <= player.influence[faction]:
+                    get_alliance = False
+                    break
+        else:
+            get_alliance = False
+
+        if get_alliance:
+            for i, player in enumerate(self.game.players):
+                if player is self:
+                    continue
+                player.remove_alliance(faction)
+            self.add_alliance(faction)
+
+    def remove_alliance(self, faction: Faction):
+        if faction in self.alliances:
+            self.alliances.remove(faction)
+            self.str_out += '\n' + (f"--Alliance: {faction}")
+    def add_alliance(self, faction: Faction):
+        self.alliances.add(faction)
+        self.str_out += '\n' + (f"++Alliance: {faction}")
     def add_icons(self, icons: List[Icon]):
         self.icons.update(icons)
     def draw(self):
@@ -71,50 +122,57 @@ class Player(object):
         card = self.deck.pop()
         self.hand_cards.append(card)
 
+    def change_persuasion(self, n: int):
+        self.persuasion += n
+        if n > 0:
+            self.str_out += '\n' + (f"+Persuasion: {n}")
+        else:
+            self.str_out += '\n' + (f"-Persuasion: {n}")
+
     def change_spice_solari(self, spice: int, solari: int):
         self.change_spice(spice)
         self.change_solari(solari)
     def change_spice(self, n: int):
         self.spice += n
         if n > 0:
-            print(f"+Spice: {n}")
+            self.str_out += '\n' + (f"+Spice: {n}")
         else:
-            print(f"-Spice: {n}")
+            self.str_out += '\n' + (f"-Spice: {n}")
 
     def change_solari(self, n: int):
         self.solari += n
         if n > 0:
-            print(f"+Money: {n}")
+            self.str_out += '\n' + (f"+Money: {n}")
         else:
-            print(f"-Money: {n}")
+            self.str_out += '\n' + (f"-Money: {n}")
 
     def change_garrison(self, n: int):
         self.garrison += n
         if n > 0:
-            print(f"+Garrison: {n}")
+            self.str_out += '\n' + (f"+Garrison: {n}")
         else:
-            print(f"-Garrison: {n}")
+            self.str_out += '\n' + (f"-Garrison: {n}")
 
     def change_to_deploy(self, n: int):
         self.to_deploy += n
         if n > 0:
-            print(f"+To Deploy: {n}")
+            self.str_out += '\n' + (f"+To Deploy: {n}")
         else:
-            print(f"-To Deploy: {n}")
+            self.str_out += '\n' + (f"-To Deploy: {n}")
 
     def change_in_combat(self, n: int):
         self.in_combat += n
         if n > 0:
-            print(f"+In Combat: {n}")
+            self.str_out += '\n' + (f"+In Combat: {n}")
         else:
-            print(f"-In Combat: {n}")
+            self.str_out += '\n' + (f"-In Combat: {n}")
 
     def change_to_retreat(self, n: int):
         self.to_retreat += n
         if n > 0:
-            print(f"+To Retreat: {n}")
+            self.str_out += '\n' + (f"+To Retreat: {n}")
         else:
-            print(f"-To Retreat: {n}")
+            self.str_out += '\n' + (f"-To Retreat: {n}")
 
     def has_hand_cards(self):
         return len(self.hand_cards) != 0
@@ -148,7 +206,7 @@ class Player(object):
 
 
     def reveal(self):
-        self.has_revealed = True
+        self.revealed = True
         self.current_choicing = 'reveal'
 
     def done_reveal(self):
@@ -204,7 +262,7 @@ class Player(object):
         return False
 
     def reset(self):
-        self.has_revealed = False
+        self.revealed = False
         self.to_deploy = 0
         self.in_combat = 0
         self.current_card = None
@@ -212,8 +270,9 @@ class Player(object):
         self.discard_pile.extend(self.played_cards)
         self.played_cards = []
         self.to_retreat = 0
+        self.persuasion = 0
         self.last_state = 'start'
-        if self.has_revealed and len(self.hand_cards) != 0:
+        if self.revealed and len(self.hand_cards) != 0:
             raise Exception("Player still has cards in hand after turn!")
 
         self.draw()
