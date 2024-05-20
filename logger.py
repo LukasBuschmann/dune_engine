@@ -1,8 +1,10 @@
+import random
+
 class Logger:
     def __init__(self, game: 'Game'):
         self.game = game
         self.max_width = 300
-        self.cols = 3
+        self.cols = 4
         self.col_space = 3
         self.line_size = self.max_width // self.cols
         self.target_len = self.line_size - self.col_space
@@ -52,28 +54,34 @@ class Logger:
         changes = []
         for player in self.game.players:
             changes.append(player.str_out.split('\n')[1:])
-
+            player.str_out = ''
         self.print_lb_list('Changes', changes)
 
-    def print_game_state(self, actions, choice=None):
+    def print_game_state(self, actions, choice=None, ):
 
         global_attributes = [
-            ('State', lambda: self.game.game_machine.get_state(self.game.state).name),
+            ('Node', lambda: self.game.game_machine.get_state(self.game.state).name),
+            ('Game State', lambda: self.game.game_state),
             ('Current Player', lambda: self.game.current_player),
         ]
 
         attributes = [
+            ('Player', lambda player: player),
+            ('Revealed', lambda player: player.has_revealed()),
             ('S', lambda player: player.spice),
             ('$', lambda player: player.solari),
+            ('W', lambda player: player.water),
             ('P', lambda player: player.persuasion),
             ('Available Icons', lambda player: player.icons),
             ('Current Card', lambda player: player.current_card),
             ('Cards', lambda player: player.hand_cards),
-            ('Current Plot', lambda player: player.current_plot),
-            ('Plots', lambda player: player.hand_plot_cards),
+            ('Current Plot', lambda player: player.current_intrigue),
+            ('Plots', lambda player: player.intrigues),
             ('Played Cards', lambda player: player.played_cards),
             ('Discard Pile', lambda player: player.discard_pile),
             ('Deck', lambda player: player.deck),
+            ('Choices', lambda player: player.open_choices),
+            ('Choicing', lambda player: player.current_choicing),
         ]
 
         current_player_attributes = [
@@ -81,8 +89,8 @@ class Logger:
         ]
         if choice is not None:
             current_player_attributes.append(('Choice', lambda player: f'{actions[choice]} ({choice})'))
-
         print('=' * self.max_width)
+        print()
         for attr, func in global_attributes:
             print(self.fix_string_length(attr + ': ' + str(func()), self.max_width), end='')
             print()
@@ -125,3 +133,30 @@ class Logger:
                 self.print_lb_list(attr, values)
 
         print('-' * self.max_width)
+
+    def choose_action(self, actions, move_list, auto):
+        invalid_input = True
+        while invalid_input and not move_list:
+            if auto:
+                choice = random.randint(0, len(actions) - 1)
+                break
+            else:
+                choice = input("Choose an action: ")
+                try:
+                    if choice == 'debug':
+                        debug = not debug
+                        print(f"Debug mode: {debug}")
+                        continue
+                    choice = int(choice)
+                    if choice < 0 or choice >= len(actions):
+                        raise ValueError
+                    invalid_input = False
+                except ValueError:
+                    pass
+        if move_list:
+            choice = move_list.pop(0)
+
+        choice_str = f'{choice} - {actions[choice]}' + (' (ml)' if move_list else ' (auto)' if auto and not move_list else '')
+        self.print_linebreak([choice_str if self.game.current_player == player else '' for player in self.game.players])
+        print('-' * self.max_width)
+        return choice

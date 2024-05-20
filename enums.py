@@ -8,7 +8,7 @@ class Faction(Enum):
     # NO_FACTION = "No Faction"
 
 class Icon(Enum):
-    IMPERIUM = "Imperium"
+    EMPEROR = "Emperor"
     FREMEN = "Fremen"
     SPACING_GUILD = "Spacing Guild"
     BENE_GESSERIT = "Bene Gesserit"
@@ -29,9 +29,26 @@ class ChoiceType(Enum):
     CARD = 'Card'
     NUMERIC = 'Numeric'
     FACTION = 'Faction'
+    PLAYER = 'Player'
 
 class Commander(Enum):
     PAUL_ARTREIDES = "Paul Artreides"
     THE_BEAST = "The Beast"
     BARON_VLADIMIR_HARKONNEN = "Baron Vladimir Harkonnen"
     DUKE_LETO_ARTREIDES = "Duke Leto Artreides"
+
+class GameState(Enum):
+    AGENT = 'Agent'
+    IN_CONFLICT = 'In Conflict'
+    CONFLICT_OVER = 'Conflict Over'
+    FINALE = 'Finale'
+
+class IntrigueType(Enum):
+    PLOT = 'Plot'
+    CONFLICT = 'Conflict'
+    FINALE = 'Finale'
+
+class TurnType(Enum):
+    UNDECIDED = 'Undecided'
+    AGENT = 'Agent'
+    REVEAL = 'Reveal'
