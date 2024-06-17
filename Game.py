@@ -3,9 +3,9 @@ from transitions import Machine
 from logger import Logger
 from itertools import groupby
 
-import demo_board as db
-import demo_player as dp
-from demo_cards import conflict_cards
+import Location as db
+import Player as dp
+from Cards import conflict_cards
 from enums import Commander, GameState
 from Shop import Shop
 import time

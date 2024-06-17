@@ -5,11 +5,11 @@ from typing import Callable, List, Dict
 from functools import partialmethod, partial
 
 import Effect
-import demo_player as dp
-import demo_game as dg
-from demo_board import locations
-import demo_board as db
-import demo_cards as dc
+import Player as dp
+import Game as dg
+from Location import locations
+import Location as db
+import Cards as dc
 from enums import ChoiceType, Faction, GameState, TurnType
 
 if __name__ == '__main__':

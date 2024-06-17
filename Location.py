@@ -5,7 +5,7 @@ from Requirement import SpiceRequirement, noRequirement, NoFullfillmentRequireme
 from Effect import Effect, SpiceEffect, GarrisonEffect, spice_trade, SolariEffect, PersuasionEffect, GarrisonEffect, \
     DeployEffect, ChoicelessEffect, CardEffect, MentatEffect, WormSpiceEffect, CaptureSpiceEffect, CaptureSolariEffect, \
     IntrigueEffect, InfluenceEffect, WaterEffect, FoldSpaceEffect, RemoveCardEffect, StealIntrigueEffect
-import demo_cards as dc
+import Cards as dc
 from enums import Icon, Faction, ChoiceType
 
 

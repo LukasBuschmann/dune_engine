@@ -1,7 +1,7 @@
 from typing import Set, List
 import random
 import itertools
-from demo_cards import cards, plots, shop_cards, foldspace
+from Cards import cards, plots, shop_cards, foldspace
 class Shop:
     def __init__(self, game: 'Game'):
         static_names = ['The Spice Must Flow', 'Arrakis Liaison']
