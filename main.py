@@ -7,6 +7,7 @@ from functools import partialmethod, partial
 import Effect
 import demo_player as dp
 import demo_game as dg
+from demo_board import locations
 import demo_board as db
 import demo_cards as dc
 from enums import ChoiceType, Faction, GameState, TurnType
@@ -18,7 +19,7 @@ if __name__ == '__main__':
 
     def generate_transitions(game: 'Game') -> List[Dict]:
 
-        cards = game.shop.draw_pile + game.shop.imperium_row
+        cards = game.shop.draw_pile + game.shop.imperium_row + game.shop.foldspaces
         [cards.extend(player.hand_cards + player.deck) for player in game.players]
         # cards with no icons are not playable in agent turn
         playable_cards_agent = list(filter(lambda card: len(card.icons) != 0, cards))
@@ -34,6 +35,7 @@ if __name__ == '__main__':
         choices.append((ChoiceType.NUMERIC, possible_troop_counts))
         choices.append((ChoiceType.PLAYER, game.players))
         choices.append((ChoiceType.CARD, cards))
+        choices.append((ChoiceType.LOCATION,  locations))
 
         transitions = []
         # Plot Cards
@@ -45,7 +47,7 @@ if __name__ == '__main__':
                 {'trigger': 'end_turn', 'source': 'Shop', 'dest': 'end', },
                 {'trigger': 'end_turn', 'source': 'Revealed', 'dest': 'end'},
                 {'trigger': 'end_turn', 'source': 'start', 'dest': 'end',
-                 'conditions': lambda: game.current_player.has_revealed() and not game.game_state == GameState.CONFLICT_OVER},
+                 'conditions': lambda: game.current_player.has_revealed() and game.game_state != GameState.CONFLICT_OVER},
             ]
         )
         # Shop
@@ -239,5 +241,5 @@ move_list=[]
 game.walk(
     move_list=move_list,
     auto=True,
-    debug=False
+    debug=True
 )

@@ -32,10 +32,16 @@ class Game:
                                 location.name in ['Imperial Basin', 'Hagga Basin', 'The Great Flat']}
         self.capture_locations = {location: None for location in self.locations if
                                 location.name in ['Imperial Basin', 'Arrakeen', 'Carthag']}
+        self.current_conflict: 'ConflictCard' = None
+        self.choose_next_conflict()
+        self.round_number = 0
 
     def get_current_conflict(self):
+        return self.current_conflict
+    def choose_next_conflict(self):
         # return self.conflict_cards[-1]
-        return random.sample(self.conflict_cards, 1)[0]
+        self.current_conflict = random.sample(self.conflict_cards, 1)[0]
+
 
     def get_location(self, location_name):
         return next(location for location in self.locations if location.name == location_name)
@@ -70,6 +76,11 @@ class Game:
             for location in self.locations:
                 location.is_occupied = False
             self.mentat_available = True
+            for player in self.players:
+                player.has_resolved_conflict = False
+            self.choose_next_conflict()
+
+            self.round_number += 1
 
     def mentat_is_available(self):
         return self.mentat_available

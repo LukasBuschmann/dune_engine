@@ -1,0 +1,4 @@
+Selective Breeding: no card draw (also cards get drawn before removal) maybe draw works
+remove deployable (= 0 )after each agent turn
+card draw not working propperly: drawed 4 instead of 5 cards when only 3 cards available in deck after battle
+cant change influence, if change would exceed cap (shifting allegiance)

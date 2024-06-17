@@ -4,9 +4,10 @@ from Requirement import Choice
 
 
 class Effect():
-    def __init__(self, effect: Callable[['Game', List[Any]], Any], choices: List[Choice] = []):
+    def __init__(self, effect: Callable[['Game', List[Any]], Any], choices: List[Choice] = [], precondition: Callable[['Game'], bool] = lambda game: True):
         self.effect: Callable[['Game', List[Any]], None] = effect
         self.choices: List[Choice] = choices
+        self.precondition: Callable[['Game'], bool] = precondition
 
     def execute(self, game: 'Game', decisions: List[Any]):
         # For breakpoints
@@ -102,16 +103,20 @@ class MentatEffect(ChoicelessEffect):
     def __init__(self):
         super().__init__(lambda game: game.current_player.add_mentat())
 
+class AgentEffect(ChoicelessEffect):
+    def __init__(self):
+        super().__init__(lambda game: game.current_player.add_agent())
 
 class InfluenceChoiceEffect(Effect):
-    def __init__(self, n: int, excluded_factions: Set[Faction] = set()):
+    def __init__(self, n: int, excluded_factions: Set[Faction] = set(), precondition: Callable[['Game'], bool] = lambda game: True):
         super().__init__(
             effect=lambda game, faction: game.current_player.change_influence(faction, n),
             choices=[Choice(
                 ChoiceType.FACTION,
                 lambda game, faction: faction not in excluded_factions and game.current_player.can_change_faction(
                     faction, n)
-            )]
+            )],
+            precondition=precondition
         )
 
 class InfluenceEffect(ChoicelessEffect):
@@ -158,22 +163,20 @@ class StealIntrigueEffect(ChoicelessEffect):
             lambda game: game.current_player.try_steal_intrigues()
         )
 
+class RetreatEffect(ChoicelessEffect):
+    def __init__(self, n):
+        super().__init__(
+            lambda game: game.current_player.change_to_retreat(n)
+        )
+
 
 
 noEffect = ChoicelessEffect(lambda game: None)
-swappero_effect = ChoicelessEffect(_swappero_effect)
-bin_choice = Effect(
-    lambda game, decision: game.current_player.change_solari(2) if decision else game.current_player.change_spice(2),
-    choices=[Choice(
-        ChoiceType.BOOLEAN,
-        lambda game, decision:
-        True if decision
-        else game.current_player.solari > game.current_player.spice)])
 
 spice_trade = Effect(
     effect=lambda game, decision: game.current_player.change_spice_solari(2 - decision, 6 + (2 * (decision - 2))),
     choices=[Choice(
         choice_type=ChoiceType.NUMERIC,
-        condition=lambda game, decision: decision in [2, 3, 4, 5] and game.current_player.spice >= decision
+        condition=lambda game, decision: decision in [2, 3, 4, 5] and game.current_player.spice >= (decision - 2)
     )]
 )

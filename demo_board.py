@@ -14,12 +14,14 @@ class Location:
                  name: str,
                  requirement: dc.Requirement,
                  effect: dc.Effect,
-                 icons: Set[Icon]):
+                 icons: Set[Icon],
+                 faction: Faction = None):
         self.name: str = name
         self.requirement: dc.Requirement = requirement
         self.effect: dc.Effect = effect
         self.is_occupied: bool = False
         self.icons: Set[Icon] = icons
+        self.faction: Faction = faction
 
     def occupy(self):
         self.is_occupied = True
@@ -28,7 +30,7 @@ class Location:
         self.is_occupied = False
 
     def __repr__(self):
-        return self.name + (str(self.icons) if len(self.icons) > 0 else "")
+        return self.name.lower() if self.is_occupied else self.name.upper()
 
     def __str__(self):
         return self.name + (str(self.icons) if len(self.icons) > 0 else "")
@@ -134,26 +136,30 @@ locations = [
         name="Conspire",
         requirement=SpiceRequirement(4),
         effect=InfluenceEffect(dc.Faction.EMPEROR, 1) + SolariEffect(4) + GarrisonEffect(2) + IntrigueEffect(),
-        icons={Icon.EMPEROR}
+        icons={Icon.EMPEROR},
+        faction=Faction.EMPEROR
     ),
     Location(
         name="Wealth",
         requirement=noRequirement,
         effect=InfluenceEffect(dc.Faction.EMPEROR, 1) + SolariEffect(2),
-        icons={Icon.EMPEROR}
+        icons={Icon.EMPEROR},
+        faction=Faction.EMPEROR
     ),
 
     Location(
         name="Heighliner",
         requirement=SpiceRequirement(6),
         effect=InfluenceEffect(dc.Faction.SPACING_GUILD, 1) + GarrisonEffect(5) + DeployEffect(7) + WaterEffect(2),
-        icons={Icon.SPACING_GUILD}
+        icons={Icon.SPACING_GUILD},
+        faction=Faction.SPACING_GUILD
     ),
     Location(
         name="Wealth",
         requirement=noRequirement,
         effect=InfluenceEffect(dc.Faction.SPACING_GUILD, 1) + FoldSpaceEffect(),
-        icons={Icon.SPACING_GUILD}
+        icons={Icon.SPACING_GUILD},
+        faction=Faction.SPACING_GUILD
     ),
     # Workaround for flawed effect system
     Location(
@@ -170,24 +176,28 @@ locations = [
                 ChoiceType.CARD,
                 lambda game, card: game.current_player.is_removable_card(card)
             )]),
+        faction=Faction.BENE_GESSERIT
     ),
     Location(
         name="Secrets",
         requirement=noRequirement,
         effect=InfluenceEffect(dc.Faction.BENE_GESSERIT, 1) + IntrigueEffect() + StealIntrigueEffect(),
-        icons={Icon.BENE_GESSERIT}
+        icons={Icon.BENE_GESSERIT},
+        faction=Faction.BENE_GESSERIT
     ),
 
     Location(
         name="Hardy Warriors",
         requirement=WaterRequirement(1),
         effect=InfluenceEffect(dc.Faction.FREMEN, 1) + DeployEffect(4) + GarrisonEffect(2),
-        icons={Icon.FREMEN}
+        icons={Icon.FREMEN},
+        faction=Faction.FREMEN
     ),
     Location(
         name="Secrets",
         requirement=noRequirement,
         effect=InfluenceEffect(dc.Faction.FREMEN, 1) + DeployEffect(2) + WaterEffect(1),
-        icons={Icon.FREMEN}
+        icons={Icon.FREMEN},
+        faction=Faction.FREMEN
     ),
 ]

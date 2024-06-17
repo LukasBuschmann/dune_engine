@@ -43,7 +43,7 @@ class NoFullfillmentRequirement(Requirement):
 class InfluenceRequirement(NoFullfillmentRequirement):
     def __init__(self, faction: 'Faction', influence: int):
         self.requirement = lambda game: game.current_player.factions[faction]['influence'] >= influence
-
+        self.fulfillment = lambda game: None
 
 noRequirement = Requirement(lambda game: True, lambda game: None)
 

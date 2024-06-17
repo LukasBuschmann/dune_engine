@@ -60,18 +60,22 @@ class Logger:
     def print_game_state(self, actions, choice=None, ):
 
         global_attributes = [
+            ('Round', lambda: self.game.round_number),
             ('Node', lambda: self.game.game_machine.get_state(self.game.state).name),
             ('Game State', lambda: self.game.game_state),
             ('Current Player', lambda: self.game.current_player),
+            ('Locations', lambda: self.game.locations),
         ]
 
         attributes = [
             ('Player', lambda player: player),
             ('Revealed', lambda player: player.has_revealed()),
+            ('Resolved', lambda player: player.has_resolved_conflict),
             ('S', lambda player: player.spice),
             ('$', lambda player: player.solari),
             ('W', lambda player: player.water),
             ('P', lambda player: player.persuasion),
+            ('Factions', lambda player: list(map(lambda fac_inf: f"{fac_inf[0].name}: {fac_inf[1]['influence']}", player.factions.items()))),
             ('Available Icons', lambda player: player.icons),
             ('Current Card', lambda player: player.current_card),
             ('Cards', lambda player: player.hand_cards),
@@ -81,6 +85,7 @@ class Logger:
             ('Discard Pile', lambda player: player.discard_pile),
             ('Deck', lambda player: player.deck),
             ('Choices', lambda player: player.open_choices),
+            ('Decisions', lambda player: player.decided_choices),
             ('Choicing', lambda player: player.current_choicing),
         ]
 
