@@ -28,7 +28,7 @@ class Shop:
     def draw_shop_foldspace(self, player: 'Player'):
         if len(self.foldspaces) > 0:
             player.discard_pile.append(self.foldspaces.pop())
-    def get_cards_in_shop(self):
+    def get_cards_in_shop(self): # ToDo: fix this to contain static cards as well
         return self.imperium_row
     def shop_buy(self, card: 'Card', player: 'Player'):
         if card not in self.imperium_row:

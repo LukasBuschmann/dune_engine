@@ -1,6 +1,6 @@
 from typing import List, Callable, TypeVar, Generic
 from abc import ABC, abstractmethod
-from enums import Faction
+from enums import Faction, TurnType
 import random
 
 T = TypeVar('T')
@@ -15,7 +15,7 @@ class Choice(Generic[T]):
         self.condition = condition
 
     def valid_choices(self, game: 'Game') -> List[T]:
-        return [choice for choice in self.choice_type.choices if self.condition(game, choice)]
+        return [choice for choice in self.choice_type.get_choices(game) if self.condition(game, choice)]
 
 
 class Resolver(ABC):
@@ -28,6 +28,7 @@ class RandomResolver(Resolver):
         return random.choice(choices)
 
 
+turn_type_choice_t: ChoiceType[TurnType] = ChoiceType('Turn Type', lambda game: game.current_player.get_turn_types())
 boolean_choice_t: ChoiceType[bool] = ChoiceType('Boolean', lambda game: [True, False])
 garrison_choice_t: ChoiceType[int] = ChoiceType('Garrison', lambda game: [i for i in range(-12, 13)])
 spice_trade_choice_t: ChoiceType[int] = ChoiceType('Spice Trade', lambda game: [i for i in range(2, 6)])
@@ -37,3 +38,4 @@ shop_choice_t: ChoiceType['Card'] = ChoiceType('Shop Card', lambda game: game.sh
 location_choice_t: ChoiceType['Location'] = ChoiceType('Location', lambda game: game.locations)
 faction_choice_t: ChoiceType['Faction'] = ChoiceType('Faction', lambda game: [faction for faction in Faction])
 
+playable_cards_choice: Choice['Card'] = Choice(hand_choice_t, lambda game, card: card.is_playable_with(game, card))

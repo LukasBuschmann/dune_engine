@@ -2,7 +2,8 @@ from transitions import Machine
 from typing import List, Set, ClassVar, Any
 import random
 import itertools
-from Cards import start_cards
+from Cards import start_cards, noIntrigue, noCard
+import Choice
 from Location import faction_rewards
 from enums import Icon, Faction, Commander, IntrigueType, GameState, TurnType
 import Effect
@@ -12,6 +13,8 @@ class Player(object):
     def __init__(self, game: 'Game', commander: Commander):
         self.game: 'Game' = game
         self.commander: Commander = commander
+
+        self.resolver: 'Resolver' = Choice.RandomResolver()
 
         self.victory_points = 0
 
@@ -535,3 +538,114 @@ class Player(object):
         self.current_choicing = None
         self.decided_choices = []
         self.revealed = False
+
+
+    # ================= V2 =====================
+
+
+    def has_playable_card(self) -> bool:
+        for card in self.hand_cards:
+            if card.is_playable_with(self.game, card):
+                return True
+        return False
+
+    def has_playable_plot(self) -> bool:
+        for plot in self.intrigues:
+            if plot.intrigue_type == IntrigueType.PLOT:
+                if plot.requirement.is_met(self.game):
+                    return True
+        return False
+
+    def get_playable_intrigues(self, intrigue_type: IntrigueType) -> List['IntrigueInstance']:
+        playable_plots = []
+        for plot in self.intrigues:
+            if plot.intrigue_type == intrigue_type:
+                if plot.requirement.is_met(self.game):
+                    playable_plots.append(plot)
+
+    def get_turn_types(self) -> List[TurnType]:
+        allowed_turns = []
+        if self.has_playable_card():
+            allowed_turns.append(TurnType.AGENT)
+        if not self.has_revealed():
+            allowed_turns.append(TurnType.REVEAL)
+        return allowed_turns
+
+    def get_playable_cards(self) -> List['CardInstance']:
+        return [card for card in self.hand_cards if card.is_playable_with(self.game, card)]
+
+    def get_playable_locations_with(self, card: 'CardInstance') -> List['Location']:
+        return [location for location in self.game.locations if self.location_available_for_card(location, card)]
+
+    def play(self, card: 'CardInstance'):
+        self.hand_cards.remove(card)
+        self.played_cards.append(card)
+        card.agent_effect.execute(self.game)
+
+    def reveal(self, card: 'CardInstance'):
+        self.hand_cards.remove(card)
+        self.revealed_cards.append(card)
+        card.reveal_effect.execute(self.game)
+
+    def deploy(self, n: int):
+        self.garrison -= n
+        self.in_combat += n
+
+    def play_plots(self):
+        while True:
+            playable_plots = self.get_playable_intrigues(IntrigueType.PLOT) + noIntrigue
+            plot_choice: 'IntrigueInstance' = self.resolver.resolve(self.game, playable_plots)
+            if plot_choice is noIntrigue:
+                break
+            plot_choice.effect.execute(self.game, [])
+
+    def deploy_troops(self):
+        deployable_troops = list(range(-min(self.retreatable, self.in_combat), min(self.deployable, self.garrison)+1))
+        deployment_choice = self.resolver.resolve(self.game, deployable_troops)
+        self.deploy(deployment_choice)
+    def agent_turn(self):
+        playable_cards = self.get_playable_cards()
+        card_choice: 'CardInstance' = self.resolver.resolve(self.game, playable_cards)
+        playable_locations = self.get_playable_locations_with(card_choice)
+        location_choice: 'Location' = self.resolver.resolve(self.game, playable_locations)
+        location_choice.occupy()
+        location_choice.requirement.fulfill(self.game)
+        location_choice.effect.execute(self.game, [])
+        self.play(card_choice)
+        self.play_plots()
+        self.deploy_troops()
+
+    def reveal_turn(self):
+        for card in self.hand_cards:
+            self.reveal(card)
+        while True:
+            available_cards = self.game.shop.get_cards_in_shop()
+            purchasable_cards = [card for card in available_cards if self.can_buy(card)] + noCard
+            card_choice: 'CardInstance' = self.resolver.resolve(self.game, purchasable_cards)
+            if card_choice is noCard:
+                break
+            self.buy(card_choice)
+        self.play_plots()
+        self.deploy_troops()
+
+    def agent_or_reveal_turn(self):
+        turn_types = self.get_turn_types()
+        turn_choice = self.resolver.resolve(self.game, turn_types)
+        if turn_choice == TurnType.AGENT:
+            self.agent_turn()
+        elif turn_choice == TurnType.REVEAL:
+            self.reveal_turn()
+
+    def combat_turn(self):
+        playable_conflict_intrigues = self.get_playable_intrigues(IntrigueType.CONFLICT) + noIntrigue
+        conflict_choice: 'IntrigueInstance' = self.resolver.resolve(self.game, playable_conflict_intrigues)
+        conflict_choice.effect.execute(self.game, [])
+
+    def finale_turn(self):
+        while True:
+            playable_finale_intrigues = self.get_playable_intrigues(IntrigueType.FINALE)
+            if len(playable_finale_intrigues) == 0:
+                break
+            finale_choice: 'IntrigueInstance' = self.resolver.resolve(self.game, playable_finale_intrigues)
+            finale_choice.effect.execute(self.game, [])
+

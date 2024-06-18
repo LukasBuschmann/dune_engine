@@ -67,6 +67,13 @@ class CardInstance:
     def __repr__(self):
         return self.name + ' ' + (str(self.icons) if len(self.icons) > 0 else '')
 
+    def is_playable_with(self, game: 'Game', card: 'CardInstance'):
+        for location in game.locations:
+            if location.is_available_with(game, card):
+                return True
+        return False
+
+noCard = CardInstance(0, "no card")
 
 shop_cards = [
     Card(
@@ -727,9 +734,12 @@ class IntrigueInstance:
         self.intrigue_type: IntrigueType = intrigue_type
         self.id = id
 
+    def is_playable(self, game: 'Game'):
+        return self.requirement.is_met(game)
     def __repr__(self):
         return self.name
 
+noIntrigue = Intrigue("no Intrigue", noEffect)
 
 plots = [
     Intrigue(

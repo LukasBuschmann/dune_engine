@@ -29,6 +29,12 @@ class Location:
     def clear(self):
         self.is_occupied = False
 
+    def is_available_with(self, game: 'Game', card: dc.Card):
+        if self.icons.intersection(card.icons):
+            if not self.is_occupied:
+                if self.requirement.is_met(game):
+                    return True
+        return False
     def __repr__(self):
         return self.name.lower() if self.is_occupied else self.name.upper()
 
