@@ -1,209 +1,283 @@
-from typing import List, Callable, Set, Any
+from typing import Dict
 
-from Requirement import SpiceRequirement, noRequirement, NoFullfillmentRequirement, Requirement, SolariRequirement, \
-    WaterRequirement, InfluenceRequirement, Choice
-from Effect import Effect, SpiceEffect, GarrisonEffect, spice_trade, SolariEffect, PersuasionEffect, GarrisonEffect, \
-    DeployEffect, ChoicelessEffect, CardEffect, MentatEffect, WormSpiceEffect, CaptureSpiceEffect, CaptureSolariEffect, \
-    IntrigueEffect, InfluenceEffect, WaterEffect, FoldSpaceEffect, RemoveCardEffect, StealIntrigueEffect
-import Cards as dc
-from enums import Icon, Faction, ChoiceType
+from Requirement import *
+from effect_functions import *
 
 
 class Location:
     def __init__(self,
                  name: str,
-                 requirement: dc.Requirement,
-                 effect: dc.Effect,
+                 requirement: 'Requirement',
+                 effect: Callable[['Player'], Any],
                  icons: Set[Icon],
                  faction: Faction = None):
         self.name: str = name
-        self.requirement: dc.Requirement = requirement
-        self.effect: dc.Effect = effect
-        self.is_occupied: bool = False
+        self.requirement: 'Requirement' = requirement
+        self.effect: Callable[['Player'], Any] = effect
+        # for agents
+        self.occupied_by: List['Player'] = []
         self.icons: Set[Icon] = icons
         self.faction: Faction = faction
 
-    def occupy(self):
-        self.is_occupied = True
+        self.voiced: bool = False
+
+    def occupy(self, player: 'Player'):
+        self.occupied_by.append(player)
 
     def clear(self):
-        self.is_occupied = False
+        self.occupied_by = []
+        self.voiced = False
 
-    def is_available_with(self, game: 'Game', card: dc.Card):
+    def is_available_with(self, player: 'Player', card: 'CardInstance'):
         if self.icons.intersection(card.icons):
-            if not self.is_occupied:
-                if self.requirement.is_met(game):
-                    return True
+            if (not self.occupied_by) or player.infiltrate:
+                if self.requirement.is_met(player):
+                    if not (self.voiced and player.voice):
+                        return True
         return False
+
     def __repr__(self):
-        return self.name.lower() if self.is_occupied else self.name.upper()
+        return self.name.lower() if self.occupied_by else self.name.upper()
 
     def __str__(self):
         return self.name + (str(self.icons) if len(self.icons) > 0 else "")
 
 
-faction_rewards = {
-    Faction.EMPEROR: GarrisonEffect(2),
-    Faction.SPACING_GUILD: SolariEffect(3),
-    Faction.BENE_GESSERIT: IntrigueEffect(),
-    Faction.FREMEN: WaterEffect(1),
+class SpiceCollectingLocation(Location):
+    def __init__(self, name: str, requirement: 'Requirement', effect: Callable[['Player'], Any], icons: Set[Icon],
+                 faction: Faction = None):
+        super().__init__(name, requirement, effect, icons, faction)
+        self.collected_spice = 0
+
+    def occupy(self, player: 'Player'):
+        player.change_spice(self.collected_spice)
+        self.collected_spice = 0
+        self.occupied_by.append(player)
+
+
+class CaptureLocation(Location):
+    def __init__(self, name: str, requirement: 'Requirement', effect: Callable[['Player'], Any],
+                 capture_effect: Callable[['Player'], Any], icons: Set[Icon],
+                 faction: Faction = None):
+        super().__init__(name, requirement, effect, icons, faction)
+        self.captured_by = None
+        self.capture_effect = capture_effect
+
+    def occupy(self, player: 'Player'):
+        if self.captured_by:
+            self.capture_effect(self.captured_by)
+        self.occupied_by.append(player)
+
+
+class SpiceCollectingCaptureLocation(CaptureLocation, SpiceCollectingLocation):
+    def __init__(self, name: str, requirement: 'Requirement', effect: Callable[['Player'], Any],
+                 capture_effect: Callable[['Player'], Any], icons: Set[Icon],
+                 faction: Faction = None):
+        super().__init__(name, requirement, effect, capture_effect, icons, faction)
+        self.collected_spice = 0
+
+    def occupy(self, player: 'Player'):
+        player.change_spice(self.collected_spice)
+        self.collected_spice = 0
+        if self.captured_by:
+            self.capture_effect(self.captured_by)
+        self.occupied_by.append(player)
+
+
+faction_rewards: Dict[Faction, Callable[['Player'], Any]] = {
+    Faction.EMPEROR: garrison_2,
+    Faction.SPACING_GUILD: solari_3,
+    Faction.BENE_GESSERIT: draw_intrigue,
+    Faction.FREMEN: water_1,
 }
 
+no_location = Location(
+    name=LocationName.NO_LOCATION.value,
+    requirement=no_requirement,
+    effect=no_effect,
+    icons=set()
+)
+
+# for choice of kwisatz haderach
+agent_reserves = Location(
+    name=LocationName.AGENT_RESERVES.value,
+    requirement=no_requirement,
+    effect=no_effect,
+    icons=set()
+)
+
+imperial_basin = SpiceCollectingCaptureLocation(
+    name=LocationName.IMPERIAL_BASIN.value,
+    requirement=no_requirement,
+    effect=lambda player: (spice_1(player), enter_combat(player)),
+    capture_effect=spice_1,
+    icons={Icon.ECONOMY},
+)
+hagga_basin = SpiceCollectingLocation(
+    name=LocationName.HAGGA_BASIN.value,
+    requirement=water_requirement(1),
+    effect=lambda player: (spice_2(player), enter_combat(player)),
+    icons={Icon.ECONOMY},
+)
+the_great_flat = SpiceCollectingLocation(
+    name=LocationName.THE_GREAT_FLAT.value,
+    requirement=water_requirement(2),
+    effect=lambda player: (spice_3(player), enter_combat(player)),
+    icons={Icon.ECONOMY},
+)
+sell_melange = Location(
+    name="Sell Melange",
+    requirement=spice_requirement(2),
+    effect=sell_melange,
+    icons={Icon.ECONOMY}
+)
+secure_contract = Location(
+    name="Secure Contract",
+    requirement=no_requirement,
+    effect=solari_3,
+    icons={Icon.ECONOMY}
+)
+
+hall_of_oratory = Location(
+    name="Hall Of Oratory",
+    requirement=no_requirement,
+    effect=lambda player: (garrison_1(player), persuasion_1(player)),
+    icons={Icon.STATECRAFT}
+)
+swordmaster = Location(
+    name="Swordmaster",
+    requirement=solari_requirement(8) + no_sword_master_requirement,
+    effect=swordmaster,
+    icons={Icon.STATECRAFT}
+)
+rally_troops = Location(
+    name="Rally Troops",
+    requirement=solari_requirement(4),
+    effect=garrison_4,
+    icons={Icon.STATECRAFT}
+)
+mentat = Location(
+    name="Mentat",
+    requirement=solari_requirement(2),
+    effect=mentat,
+    icons={Icon.STATECRAFT}
+)
+high_council = Location(
+    name="High Council",
+    requirement=solari_requirement(5) + not_in_high_council_requirement,
+    effect=high_council,
+    icons={Icon.STATECRAFT}
+)
+
+arrakeen = CaptureLocation(
+    name="Arrakeen",
+    requirement=no_requirement,
+    effect=lambda player: (enter_combat(player), garrison_1(player), draw_card_1(player)),
+    capture_effect=solari_1,
+    icons={Icon.SETTLEMENT}
+)
+carthag = CaptureLocation(
+    name="Carthag",
+    requirement=no_requirement,
+    effect=lambda player: (enter_combat(player), garrison_1(player), draw_intrigue(player)),
+    capture_effect=solari_1,
+    icons={Icon.SETTLEMENT}
+)
+research_station = Location(
+    name="Research Station",
+    requirement=water_requirement(2),
+    effect=lambda player: (enter_combat(player), draw_card_3(player)),
+    icons={Icon.SETTLEMENT}
+)
+sietch_tabr = Location(
+    name="Sietch Tabr",
+    requirement=water_requirement(2) + influence_requirement(Faction.FREMEN, 2),
+    effect=lambda player: (enter_combat(player), garrison_1(player), water_1(player)),
+    icons={Icon.SETTLEMENT}
+)
+
+conspire = Location(
+    name="Conspire",
+    requirement=spice_requirement(4),
+    effect=lambda player: (influence_emperor_1(player), draw_intrigue(player), garrison_2(player), solari_5(player)),
+    icons={Icon.EMPEROR},
+    faction=Faction.EMPEROR
+)
+wealth = Location(
+    name="Wealth",
+    requirement=no_requirement,
+    effect=lambda player: (influence_emperor_1(player), solari_2(player)),
+    icons={Icon.EMPEROR},
+    faction=Faction.EMPEROR
+)
+
+heighliner = Location(
+    name="Heighliner",
+    requirement=spice_requirement(6),
+    effect=lambda player: (
+    influence_spacing_guild_1(player), enter_combat(player), garrison_5(player), water_2(player)),
+    icons={Icon.SPACING_GUILD},
+    faction=Faction.SPACING_GUILD
+)
+fold_space = Location(
+    name="Foldspace",
+    requirement=no_requirement,
+    effect=lambda player: (influence_spacing_guild_1(player), fold_space(player)),
+    icons={Icon.SPACING_GUILD},
+    faction=Faction.SPACING_GUILD
+)
+selective_breading = Location(
+    name="Selective Breeding",
+    requirement=spice_requirement(2),
+    icons={Icon.BENE_GESSERIT},
+    effect=lambda player: (influence_bene_gesserit_1(player), draw_card_2(player), remove_card(player)),
+    faction=Faction.BENE_GESSERIT
+)
+secrets = Location(
+    name="Secrets",
+    requirement=no_requirement,
+    effect=lambda player: (influence_bene_gesserit_1(player), draw_intrigue(player), steal_intrigue(player)),
+    icons={Icon.BENE_GESSERIT},
+    faction=Faction.BENE_GESSERIT
+)
+
+hardy_warriors = Location(
+    name="Hardy Warriors",
+    requirement=water_requirement(1),
+    effect=lambda player: (influence_fremen_1(player), enter_combat(player), garrison_2(player)),
+    icons={Icon.FREMEN},
+    faction=Faction.FREMEN
+)
+stillsuits = Location(
+    name="Stillsuits",
+    requirement=no_requirement,
+    effect=lambda player: (influence_fremen_1(player), enter_combat(player), water_1(player)),
+    icons={Icon.FREMEN},
+    faction=Faction.FREMEN
+)
+
 locations = [
-    Location(
-        name="Imperial Basin",
-        requirement=noRequirement,
-        effect=SpiceEffect(1) + DeployEffect(2) + WormSpiceEffect() + CaptureSpiceEffect(1),
-        icons={Icon.ECONOMY},
-    ),
-    Location(
-        name="Hagga Basin",
-        requirement=WaterRequirement(1),
-        effect=SpiceEffect(2) + DeployEffect(2) + WormSpiceEffect(),
-        icons={Icon.ECONOMY},
-    ),
-    Location(
-        name="The Great Flat",
-        requirement=WaterRequirement(2),
-        effect=SpiceEffect(3) + DeployEffect(2) + WormSpiceEffect(),
-        icons={Icon.ECONOMY},
-    ),
-    Location(
-        name="Sell Melange",
-        requirement=SpiceRequirement(2),
-        effect=spice_trade,
-        icons={Icon.ECONOMY}
-    ),
-    Location(
-        name="Secure Contract",
-        requirement=noRequirement,
-        effect=SolariEffect(3),
-        icons={Icon.ECONOMY}
-    ),
-
-    Location(
-        name="Hall Of Oratory",
-        requirement=noRequirement,
-        effect=GarrisonEffect(1) + PersuasionEffect(1),
-        icons={Icon.STATECRAFT}
-    ),
-    Location(
-        name="Swordmaster",
-        requirement=SolariRequirement(8) + NoFullfillmentRequirement(lambda game: game.current_player.max_agents < 3),
-        effect=ChoicelessEffect(lambda game: game.current_player.add_mentat()),
-        icons={Icon.STATECRAFT}
-    ),
-    Location(
-        name="Rally Troops",
-        requirement=SolariRequirement(4),
-        effect=GarrisonEffect(4),
-        icons={Icon.STATECRAFT}
-    ),
-    Location(
-        name="Mentat",
-        requirement=SolariRequirement(2) + NoFullfillmentRequirement(lambda game: game.mentat_is_available()),
-        effect=CardEffect(1) + MentatEffect(),
-        icons={Icon.STATECRAFT}
-    ),
-    Location(
-        name="High Council",
-        requirement=SolariRequirement(5) + NoFullfillmentRequirement(
-            lambda game: not game.current_player.is_in_high_council()),
-        effect=ChoicelessEffect(lambda game: game.current_player.enter_high_council()),
-        icons={Icon.STATECRAFT}
-    ),
-
-    Location(
-        name="Arrakeen",
-        requirement=noRequirement,
-        effect=DeployEffect(3) + GarrisonEffect(1) + CardEffect(1) + CaptureSolariEffect(1),
-        icons={Icon.SETTLEMENT}
-    ),
-    Location(
-        name="Carthag",
-        requirement=noRequirement,
-        effect=DeployEffect(3) + GarrisonEffect(1) + IntrigueEffect() + CaptureSolariEffect(1),
-        icons={Icon.SETTLEMENT}
-    ),
-    Location(
-        name="Research Station",
-        requirement=WaterRequirement(2),
-        effect=DeployEffect(2) + CardEffect(3),
-        icons={Icon.SETTLEMENT}
-    ),
-    Location(
-        name="Sietch Tabr",
-        requirement=WaterRequirement(2) + InfluenceRequirement(dc.Faction.FREMEN, 2),
-        effect=DeployEffect(3) + CardEffect(3),
-        icons={Icon.SETTLEMENT}
-    ),
-
-    Location(
-        name="Conspire",
-        requirement=SpiceRequirement(4),
-        effect=InfluenceEffect(dc.Faction.EMPEROR, 1) + SolariEffect(4) + GarrisonEffect(2) + IntrigueEffect(),
-        icons={Icon.EMPEROR},
-        faction=Faction.EMPEROR
-    ),
-    Location(
-        name="Wealth",
-        requirement=noRequirement,
-        effect=InfluenceEffect(dc.Faction.EMPEROR, 1) + SolariEffect(2),
-        icons={Icon.EMPEROR},
-        faction=Faction.EMPEROR
-    ),
-
-    Location(
-        name="Heighliner",
-        requirement=SpiceRequirement(6),
-        effect=InfluenceEffect(dc.Faction.SPACING_GUILD, 1) + GarrisonEffect(5) + DeployEffect(7) + WaterEffect(2),
-        icons={Icon.SPACING_GUILD},
-        faction=Faction.SPACING_GUILD
-    ),
-    Location(
-        name="Wealth",
-        requirement=noRequirement,
-        effect=InfluenceEffect(dc.Faction.SPACING_GUILD, 1) + FoldSpaceEffect(),
-        icons={Icon.SPACING_GUILD},
-        faction=Faction.SPACING_GUILD
-    ),
-    # Workaround for flawed effect system
-    Location(
-        name="Selective Breeding",
-        requirement=SpiceRequirement(2),
-        icons={Icon.BENE_GESSERIT},
-        effect=Effect(
-            effect=lambda game, card: (
-                game.current_player.remove_card(card),
-                InfluenceEffect(dc.Faction.BENE_GESSERIT, 1).effect(game),
-                CardEffect(2).effect(game)
-            ),
-            choices=[Choice(
-                ChoiceType.CARD,
-                lambda game, card: game.current_player.is_removable_card(card)
-            )]),
-        faction=Faction.BENE_GESSERIT
-    ),
-    Location(
-        name="Secrets",
-        requirement=noRequirement,
-        effect=InfluenceEffect(dc.Faction.BENE_GESSERIT, 1) + IntrigueEffect() + StealIntrigueEffect(),
-        icons={Icon.BENE_GESSERIT},
-        faction=Faction.BENE_GESSERIT
-    ),
-
-    Location(
-        name="Hardy Warriors",
-        requirement=WaterRequirement(1),
-        effect=InfluenceEffect(dc.Faction.FREMEN, 1) + DeployEffect(4) + GarrisonEffect(2),
-        icons={Icon.FREMEN},
-        faction=Faction.FREMEN
-    ),
-    Location(
-        name="Secrets",
-        requirement=noRequirement,
-        effect=InfluenceEffect(dc.Faction.FREMEN, 1) + DeployEffect(2) + WaterEffect(1),
-        icons={Icon.FREMEN},
-        faction=Faction.FREMEN
-    ),
+    agent_reserves,
+    imperial_basin,
+    hagga_basin,
+    the_great_flat,
+    sell_melange,
+    secure_contract,
+    hall_of_oratory,
+    swordmaster,
+    rally_troops,
+    mentat,
+    high_council,
+    arrakeen,
+    carthag,
+    research_station,
+    sietch_tabr,
+    conspire,
+    wealth,
+    heighliner,
+    fold_space,
+    selective_breading,
+    secrets,
+    hardy_warriors,
+    stillsuits,
 ]

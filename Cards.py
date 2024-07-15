@@ -1,33 +1,32 @@
-import random
-from typing import Callable, List, Set
+from typing import Any
 
-from enums import Icon, ChoiceType, Faction, IntrigueType
-from Effect import Effect, DeployEffect, noEffect, InfluenceEffect, ChoicelessEffect, PersuasionEffect, \
-    WaterEffect, SpiceEffect, SolariEffect, GarrisonEffect, ForceEffect, VictoryEffect, IntrigueEffect, \
-    InfluenceChoiceEffect, CardEffect, RemoveCardEffect, AgentEffect, RetreatEffect
-from Requirement import Requirement, SpiceRequirement, noRequirement, Choice, BreakBinChoice
-import itertools
+from Location import imperial_basin, arrakeen, carthag, CaptureLocation
+from effect_functions import *
 
 
 class Card:
     def __init__(self,
                  name: str,
                  persuasion_cost: int = 0,
-                 icons: Set[Icon] = set(),
-                 factions: Set[Faction] = set(),
-                 agent_effect: Effect = noEffect,
-                 reveal_effect: Effect = noEffect,
-                 removal_effect: ChoicelessEffect = noEffect,
-                 acquisition_effect: ChoicelessEffect = noEffect,
+                 icons=None,
+                 factions=None,
+                 agent_effect: Callable[['Player'], Any] = no_effect,
+                 reveal_effect: Callable[['Player'], Any] = no_effect,
+                 removal_effect: Callable[['Player'], Any] = no_effect,
+                 acquisition_effect: Callable[['Player'], Any] = no_effect,
                  copies: int = 1):
+        if factions is None:
+            factions = set()
+        if icons is None:
+            icons = set()
         self.name: str = name
         self.persuasion_cost: int = persuasion_cost
         self.icons: Set[Icon] = icons
         self.factions: Set[Faction] = factions
-        self.agent_effect: Effect = agent_effect
-        self.reveal_effect: Effect = reveal_effect
-        self.removal_effect: ChoicelessEffect = removal_effect
-        self.acquisition_effect: ChoicelessEffect = acquisition_effect
+        self.agent_effect: Callable[['Player'], Any] = agent_effect
+        self.reveal_effect: Callable[['Player'], Any] = reveal_effect
+        self.removal_effect: Callable[['Player'], Any] = removal_effect
+        self.acquisition_effect: Callable[['Player'], Any] = acquisition_effect
         self.copies = copies
 
     def __repr__(self):
@@ -45,680 +44,692 @@ class CardInstance:
     def __init__(self,
                  id: int,
                  name: str,
-                 persuasion_cost: int = 0,
-                 icons: Set[Icon] = set(),
-                 factions: Set[Faction] = set(),
-                 agent_effect: Effect = noEffect,
-                 reveal_effect: Effect = noEffect,
-                 removal_effect: Effect = noEffect,
-                 acquisition_effect: Effect = noEffect,
+                 persuasion_cost: int,
+                 icons: Set[Icon],
+                 factions: Set[Faction],
+                 agent_effect: Callable[['Player'], Any],
+                 reveal_effect: Callable[['Player'], Any],
+                 removal_effect: Callable[['Player'], Any],
+                 acquisition_effect: Callable[['Player'], Any],
                  copies: int = 1):
         self.name: str = name
         self.persuasion_cost: int = persuasion_cost
         self.icons: Set[Icon] = icons
         self.factions: Set[Faction] = factions
-        self.agent_effect: Effect = agent_effect
-        self.reveal_effect: Effect = reveal_effect
-        self.removal_effect: Effect = removal_effect
-        self.acquisition_effect: Effect = acquisition_effect
+        self.agent_effect: Callable[['Player'], Any] = agent_effect
+        self.reveal_effect: Callable[['Player'], Any] = reveal_effect
+        self.removal_effect: Callable[['Player'], Any] = removal_effect
+        self.acquisition_effect: Callable[['Player'], Any] = acquisition_effect
         self.copies = copies
         self.id = id
 
     def __repr__(self):
         return self.name + ' ' + (str(self.icons) if len(self.icons) > 0 else '')
 
-    def is_playable_with(self, game: 'Game', card: 'CardInstance'):
-        for location in game.locations:
-            if location.is_available_with(game, card):
+    def is_playable(self, player: 'Player', card: 'CardInstance'):
+        for location in player.game.locations:
+            if location.is_available_with(player, card):
                 return True
         return False
 
-noCard = CardInstance(0, "no card")
 
-shop_cards = [
-    Card(
-        name="Arrakis Liaison",
-        persuasion_cost=2,
-        icons={Icon.STATECRAFT, Icon.SETTLEMENT},
-        factions={Faction.FREMEN},
-        reveal_effect=ChoicelessEffect(
-            effect=lambda game: game.current_player.change_persuasion(2)
-        ),
-        copies=10  # bs number
-    ),
-    Card(
-        name="The Spice Must Flow",
-        persuasion_cost=9,
-        icons=set(),
-        reveal_effect=ChoicelessEffect(
-            effect=lambda game: game.current_player.change_spice(1)
-        ),
-        acquisition_effect=ChoicelessEffect(
-            effect=lambda game: game.current_player.change_victory_points(1)
-        ),
-        copies=10  # bs number
-    ),
-]
+no_card = CardInstance(0, "no card", 0, set(), set(), no_effect, no_effect, no_effect, no_effect,
+                       0)
+
+arrakis_liaison = Card(
+    name="Arrakis Liaison",
+    persuasion_cost=2,
+    icons={Icon.STATECRAFT, Icon.SETTLEMENT},
+    factions={Faction.FREMEN},
+    reveal_effect=persuasion_2,
+    copies=10  # bs number
+),
+
+the_spice_must_flow = Card(
+    name=CardName.THE_SPICE_MUST_FLOW.value,
+    persuasion_cost=9,
+    icons=set(),
+    reveal_effect=spice_1,
+    acquisition_effect=victory_point_1,
+    copies=10  # bs number
+),
+shop_cards = [arrakis_liaison, the_spice_must_flow]
 
 foldspace = Card(
     name="Foldspace",
     icons={Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN, Icon.ECONOMY, Icon.STATECRAFT,
            Icon.SETTLEMENT},
-    agent_effect=CardEffect(1),
+    agent_effect=draw_card_1,
     copies=10
 )
 
+# ToDo: Implement Abilities
+signet_ring = Card(
+    name='Signet Ring',
+    icons={Icon.STATECRAFT, Icon.SETTLEMENT, Icon.ECONOMY},
+    reveal_effect=persuasion_1,
+    copies=1
+)
+seek_allies = Card(
+    name=CardName.SEEK_ALLIES.name,
+    icons={Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN},
+    agent_effect=seek_allies_agent,
+    copies=1
+)
+diplomacy = Card(
+    name='Diplomacy',
+    icons={Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN},
+    reveal_effect=persuasion_1,
+    copies=1
+)
+reconnaissance = Card(
+    name='Reconnaissance',
+    icons={Icon.SETTLEMENT},
+    reveal_effect=persuasion_1,
+    copies=1
+)
+dagger = Card(
+    name='Dagger',
+    icons={Icon.STATECRAFT},
+    reveal_effect=force_1,
+    copies=2
+)
+dune = Card(
+    name='Dune, the Desert Planet',
+    icons={Icon.ECONOMY},
+    reveal_effect=persuasion_1,
+    copies=2
+)
+convincing_argument = Card(
+    name='Convincing Argument',
+    reveal_effect=persuasion_2,
+    copies=2
+)
 # ToDo: Make Ids unique among players
 start_cards = [
-    Card(
-        name='Signet Ring',
-        icons={Icon.STATECRAFT, Icon.SETTLEMENT, Icon.ECONOMY},
-        reveal_effect=PersuasionEffect(1),
-        copies=1
-    ),
-    Card(
-        name='Seek Allies',
-        icons={Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN},
-        agent_effect=ChoicelessEffect(lambda game: game.current_player.played_cards.remove(
-            list(filter(lambda card: card.name == 'Seek Allies', game.current_player.played_cards))[0])),
-        copies=1
-    ),
-    Card(
-        name='Diplomacy',
-        icons={Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN},
-        reveal_effect=PersuasionEffect(1),
-        copies=1
-    ),
-    Card(
-        name='Reconnaissance',
-        icons={Icon.SETTLEMENT},
-        reveal_effect=PersuasionEffect(1),
-        copies=1
-    ),
-    Card(
-        name='Dagger',
-        icons={Icon.STATECRAFT},
-        reveal_effect=ForceEffect(1),
-        copies=2
-    ),
-    Card(
-        name='Dune, the Desert Planet',
-        icons={Icon.ECONOMY},
-        reveal_effect=PersuasionEffect(1),
-        copies=2
-    ),
-    Card(
-        name='Convincing Argument',
-        reveal_effect=PersuasionEffect(2),
-        copies=2
-    ),
+    signet_ring,
+    seek_allies,
+    diplomacy,
+    reconnaissance,
+    dagger,
+    dune,
+    convincing_argument
 ]
 
-cards = [
-    Card(
-        name="Firm Grip",
-        persuasion_cost=4,
-        icons={Icon.EMPEROR, Icon.STATECRAFT},
-        factions={Faction.EMPEROR},
-        agent_effect=Effect(
-            effect=lambda game, activated, faction: (
-                game.current_player.change_solari(-2),
-                game.current_player.change_influence(faction, 1)
-            ) if activated else None,
-            choices=[
-                BreakBinChoice(
-                    condition=lambda game, decision: True if (
-                                                                     game.current_player.solari >= 2 and game.current_player.get_changeable_factions(
-                                                                 1)) or decision is False else False),
-                Choice(
-                    choice_type=ChoiceType.FACTION,
-                    condition=lambda game,
-                                     faction: True if faction in game.current_player.get_changeable_factions(
-                        1).intersection(
-                        {Faction.SPACING_GUILD, Faction.BENE_GESSERIT, Faction.FREMEN}) else False)
-            ],
-        ),
-        reveal_effect=ChoicelessEffect(
-            effect=lambda game: game.current_player.change_persuation(4) if game.current_player.has_alliance(
-                Faction.EMPEROR) else None
-        )
+firm_grip = Card(
+    name="Firm Grip",
+    persuasion_cost=4,
+    icons={Icon.EMPEROR, Icon.STATECRAFT},
+    factions={Faction.EMPEROR},
+    agent_effect=firm_grip_agent,
+    reveal_effect=firm_grip_reveal,
+)
+missionaria_protectiva = Card(
+    name="Missionaria Protectiva",
+    persuasion_cost=1,
+    icons={Icon.SETTLEMENT},
+    factions={Faction.BENE_GESSERIT},
+    reveal_effect=persuasion_1,
+    # 2, since there needs to be another card except this one  in play
+    agent_effect=missionaria_protectiva_agent,
+)
+spice_smugglers = Card(
+    name="Spice Smugglers",
+    persuasion_cost=2,
+    icons={Icon.SETTLEMENT},
+    factions={Faction.SPACING_GUILD},
+    agent_effect=spice_smugglers_agent,
+    reveal_effect=lambda player: (persuasion_1(player), force_1(player)),
+)
+gurney_halleck = Card(
+    name="Gurney Halleck",
+    persuasion_cost=6,
+    icons={Icon.SETTLEMENT},
+    agent_effect=lambda player: (garrison_2(player), draw_card_1(player)),
+    reveal_effect=gurney_halleck_reveal,
+)
+liet_kynes = Card(
+    name="Liet Kynes",
+    persuasion_cost=5,
+    icons={Icon.SETTLEMENT, Icon.FREMEN},
+    factions={Faction.FREMEN, Faction.EMPEROR},
+    acquisition_effect=influence_emperor_1,
+    reveal_effect=liet_kynes_reveal
+)
+sardaukar_infantry = Card(
+    name="Sardaukar Infantry",
+    persuasion_cost=1,
+    factions={Faction.EMPEROR},
+    reveal_effect=lambda player: (persuasion_1, force_2),
+)
+sietch_reverend_mother = Card(
+    name="Sietch Reverend Mother",
+    persuasion_cost=4,
+    icons={Icon.FREMEN, Icon.BENE_GESSERIT},
+    factions={Faction.BENE_GESSERIT, Faction.FREMEN},
+    agent_effect=remove_card,
+    reveal_effect=sietch_reverend_mother_reveal
+    # ToDo: RESTRICTION activating a fremen bond after revealing (using plot) is not possible
+)
+imperial_spy = Card(
+    name=CardName.IMPERIAL_SPY.name,
+    persuasion_cost=2,
+    icons={Icon.EMPEROR},
+    factions={Faction.EMPEROR},
+    agent_effect=imerial_spy_agent,
+    reveal_effect=lambda player: (persuasion_1(player), force_1(player)),
+)
+power_play = Card(
+    name=CardName.POWER_PLAY.name,
+    persuasion_cost=5,
+    icons={Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN},
+    agent_effect=power_play_agent
+)
+sardaukar_legion = Card(
+    name="Sardaukar Legion",
+    persuasion_cost=5,
+    icons={Icon.EMPEROR, Icon.STATECRAFT},
+    factions={Faction.EMPEROR},
+    agent_effect=garrison_2,
+    reveal_effect=lambda player: (persuasion_1(player), force_3(player)),
+)
+other_memory = Card(
+    name="Other Memory",
+    persuasion_cost=4,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY},
+    factions={Faction.BENE_GESSERIT},
+    agent_effect=other_memory_agent,
+    reveal_effect=persuasion_2,
+)
+shifting_allegiances = Card(
+    name="Shifting Allegiances",
+    persuasion_cost=3,
+    icons={Icon.STATECRAFT, Icon.ECONOMY},
+    reveal_effect=persuasion_2,
+    agent_effect=shifting_allegiances_agent
+)
+duncan_idaho = Card(
+    name="Duncan Idaho",
+    persuasion_cost=4,
+    icons={Icon.SETTLEMENT},
+    agent_effect=duncan_idaho_agent,
+    reveal_effect=lambda player: (water_1(player), force_2(player)),
+)
+piter_de_vries = Card(
+    name="Piter De Vries",
+    persuasion_cost=5,
+    icons={Icon.SETTLEMENT, Icon.STATECRAFT},
+    agent_effect=draw_intrigue,
+    reveal_effect=lambda player: (persuasion_3(player), force_1(player)),
+)
+worm_riders = Card(
+    name="Worm Riders",
+    persuasion_cost=6,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY},
+    factions={Faction.FREMEN},
+    agent_effect=spice_2,
+    reveal_effect=worm_riders_reveal
+)
+space_travel = Card(
+    name="Space Travel",
+    persuasion_cost=3,
+    icons={Icon.SPACING_GUILD},
+    factions={Faction.SPACING_GUILD},
+    agent_effect=draw_card_1,
+    reveal_effect=persuasion_2,
+)
+thufir_hawat = Card(
+    name="Thufir Hawat",
+    persuasion_cost=5,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.FREMEN, Icon.BENE_GESSERIT, Icon.SPACING_GUILD, Icon.EMPEROR},
+    agent_effect=draw_card_1,
+    reveal_effect=lambda player: (persuasion_1(player), draw_intrigue(player)),
+)
+lady_jessica = Card(
+    name="Lady Jessica",
+    persuasion_cost=7,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.STATECRAFT, Icon.BENE_GESSERIT},
+    factions={Faction.BENE_GESSERIT},
+    acquisition_effect=choose_influence_1,
+    agent_effect=draw_card_2,
+    reveal_effect=lambda player: (persuasion_3(player), force_1(player)),
+)
+smugglers_thopter = Card(
+    name="Smuggler's Thopter",
+    persuasion_cost=4,
+    icons={Icon.ECONOMY},
+    factions={Faction.SPACING_GUILD},
+    agent_effect=smugglers_thopter_agent,
+    reveal_effect=lambda player: (persuasion_1(player), spice_1(player)),
+)
+test_of_humanity_agent = Card(
+    name="Test of Humanity",
+    persuasion_cost=3,
+    icons={Icon.SETTLEMENT, Icon.STATECRAFT, Icon.BENE_GESSERIT},
+    factions={Faction.BENE_GESSERIT},
+    reveal_effect=persuasion_2,
+    agent_effect=test_of_humanity_agent
+)
+stilgar = Card(
+    name="Stilgar",
+    persuasion_cost=5,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.FREMEN},
+    factions={Faction.FREMEN},
+    agent_effect=water_1,
+    reveal_effect=lambda player: (persuasion_2(player), force_3(player)),
+)
+guild_bankers = Card(
+    name="Guild Bankers",
+    persuasion_cost=3,
+    icons={Icon.STATECRAFT, Icon.SPACING_GUILD, Icon.EMPEROR},
+    factions={Faction.SPACING_GUILD},
+    reveal_effect=guild_bankers_reveal
+)
+spice_hunter = Card(
+    name="Spice Hunter",
+    persuasion_cost=2,
+    icons={Icon.ECONOMY, Icon.FREMEN},
+    factions={Faction.FREMEN},
+    reveal_effect=spice_hunter_reveal,
+)
+fedaykin_death_commando = Card(
+    name="Fedaykin Death Commando",
+    persuasion_cost=3,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY},
+    factions={Faction.FREMEN},
+    agent_effect=remove_card,
+    reveal_effect=fedaykin_death_commando_reveal,
+)
+opulence = Card(
+    name="Opulence",
+    persuasion_cost=6,
+    icons={Icon.EMPEROR},
+    factions={Faction.EMPEROR},
+    agent_effect=solari_3,
+    reveal_effect=opulence_reveal,
+)
+kwisatz_haderach = Card(
+    name="Kwisatz Haderach",
+    persuasion_cost=8,
+    icons=set(),
+    agent_effect=kwisatz_haderach_agent
+)
+guild_ambassador = Card(
+    name="Guild Ambassador",
+    persuasion_cost=4,
+    icons={Icon.STATECRAFT},
+    factions={Faction.SPACING_GUILD},
+    agent_effect=guild_ambassador_agent,
+    reveal_effect=guild_bankers_reveal,
+)
+gene_manipulation = Card(
+    name="Gene Manipulation",
+    persuasion_cost=3,
+    icons={Icon.SETTLEMENT, Icon.STATECRAFT},
+    factions={Faction.BENE_GESSERIT},
+    agent_effect=gene_manipulation_agent,
+    reveal_effect=persuasion_2,
+)
+dr_yueh = Card(
+    name="Dr. Yueh",
+    persuasion_cost=1,
+    icons={Icon.SETTLEMENT},
+    agent_effect=draw_card_1,
+    reveal_effect=persuasion_1,
+)
+fremen_camp = Card(
+    name="Fremen Camp",
+    persuasion_cost=4,
+    icons={Icon.ECONOMY},
+    factions={Faction.FREMEN},
+    agent_effect=fremen_camp_agent,
+    reveal_effect=lambda player: (persuasion_2(player), force_1(player)),
+)
+chani = Card(
+    name="Chani",
+    persuasion_cost=5,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.FREMEN},
+    factions={Faction.FREMEN},
+    acquisition_effect=water_1,
+    reveal_effect=lambda player: (persuasion_2(player), retreat_all(player)),
+)
+crysknife = Card(
+    name="Crysknife",
+    persuasion_cost=3,
+    icons={Icon.ECONOMY, Icon.FREMEN},
+    factions={Faction.FREMEN},
+    agent_effect=solari_1,
+    reveal_effect=crysknife_reveal,
+)
+choam_directorship = Card(
+    name="Choam Directorship",
+    persuasion_cost=8,
+    acquisition_effect=lambda player: (
+        influence_emperor_1(player),
+        influence_spacing_guild_1(player),
+        influence_bene_gesserit_1(player),
+        influence_fremen_1(player),
     ),
-    Card(
-        name="Missionaria Protectiva",
-        persuasion_cost=1,
-        icons={Icon.SETTLEMENT},
-        factions={Faction.BENE_GESSERIT},
-        reveal_effect=PersuasionEffect(1),
-        agent_effect=InfluenceChoiceEffect(1,
-                                           precondition=lambda game: game.current_player.faction_cards_in_play(
-                                               Faction.BENE_GESSERIT) > 0 and game.current_player.has_changeable_factions())
-    ),
-    Card(
-        name="Spice Smugglers",
-        persuasion_cost=2,
-        icons={Icon.SETTLEMENT},
-        factions={Faction.SPACING_GUILD},
-        reveal_effect=PersuasionEffect(1) + ForceEffect(1),
-        agent_effect=Effect(
-            effect=lambda game, activated: (
-                SpiceEffect(-2).effect(game),
-                InfluenceEffect(Faction.SPACING_GUILD, 1).effect(game),
-                SolariEffect(3).effect(game)
-            ) if activated else None,
-            choices=[Choice(ChoiceType.BOOLEAN, lambda game, decision: True)],
-            precondition=lambda game: game.current_player.spice >= 2
-        ),
-    ),
-    Card(
-        name="Gurney Halleck",
-        persuasion_cost=6,
-        icons={Icon.SETTLEMENT},
-        agent_effect=GarrisonEffect(2) + CardEffect(1),
-        reveal_effect=Effect(
-            effect=lambda game, activated: (
-                PersuasionEffect(2).effect(game),
-                (
-                    SolariEffect(-3).effect(game),
-                    GarrisonEffect(2).effect(game),
-                    DeployEffect(2).effect(game)
-                ) if activated else None
-            ),
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.solari >= 3)]
-        ),
-    ),
-    Card(
-        name="Liet Kynes",
-        persuasion_cost=5,
-        icons={Icon.SETTLEMENT, Icon.FREMEN},
-        factions={Faction.FREMEN, Faction.EMPEROR},
-        acquisition_effect=InfluenceEffect(Faction.EMPEROR, 1),
-        reveal_effect=ChoicelessEffect(
-            lambda game: game.current_player.change_persuasion(
-                2 * (game.current_player.faction_cards_in_play(Faction.FREMEN) + 1))
-        )
-    ),
-    Card(
-        name="Sardaukar Infantry",
-        persuasion_cost=1,
-        factions={Faction.EMPEROR},
-        reveal_effect=PersuasionEffect(1) + ForceEffect(2),
-    ),
-    Card(
-        name="Sietch Reverend Mother",
-        persuasion_cost=4,
-        icons={Icon.FREMEN, Icon.BENE_GESSERIT},
-        factions={Faction.BENE_GESSERIT, Faction.FREMEN},
-        reveal_effect=ChoicelessEffect(
-            lambda game: (
-                PersuasionEffect(3).effect(game),
-                SpiceEffect(1).effect(game)
-            ) if game.current_player.faction_cards_in_play(Faction.BENE_GESSERIT) > 0 else None
-        ),
-    ),
-    Card(
-        name="Imperial Spy",
-        persuasion_cost=2,
-        icons={Icon.EMPEROR},
-        factions={Faction.EMPEROR},
-        reveal_effect=PersuasionEffect(1) + ForceEffect(1),
-        agent_effect=Effect(
-            effect=lambda game, decision: (game.current_player.played_cards.remove(
-                list(filter(lambda card: card.name == 'Imperial Spy', game.current_player.played_cards))[0]),
-                                           IntrigueEffect().effect(game)) if decision else None,
-            choices=[Choice(ChoiceType.BOOLEAN, lambda game, decision: True)]
-        )
-    ),
-    Card(
-        name="Power Play",
-        persuasion_cost=5,
-        icons={Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN},
-        agent_effect=ChoicelessEffect(
-            lambda game: game.current_player.change_influence(game.current_player.current_location.faction,
-                                                              1) if game.current_player.current_location.faction in [
-                Faction.FREMEN, Faction.BENE_GESSERIT, Faction.SPACING_GUILD, Faction.EMPEROR] else None
-        )
-    ),
-    Card(
-        name="Sardaukar Legion",
-        persuasion_cost=5,
-        icons={Icon.EMPEROR, Icon.STATECRAFT},
-        factions={Faction.EMPEROR},
-        agent_effect=GarrisonEffect(2),
-        reveal_effect=PersuasionEffect(1) + DeployEffect(3)
-    ),
-    Card(
-        name="Other Memory",
-        persuasion_cost=4,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY},
-        factions={Faction.BENE_GESSERIT},
-        reveal_effect=PersuasionEffect(2),
-        agent_effect=Effect(
-            effect=lambda game, decision, card: (CardEffect(1).effect(game) if not decision else None,
-                                                 game.current_player.draw_from_discard(card) if decision else None),
-            choices=[
-                BreakBinChoice(
-                    lambda game, decision: True if not decision else 0 < len(list(
-                        filter(lambda card: Faction.BENE_GESSERIT in card.factions,
-                               game.current_player.discard_pile)))),
-                Choice(
-                    ChoiceType.CARD,
-                    lambda game,
-                           card: Faction.BENE_GESSERIT in card.factions and card in game.current_player.discard_pile)
-            ]
-        )
-    ),
-    Card(
-        name="Shifting Allegiances",
-        persuasion_cost=3,
-        icons={Icon.STATECRAFT, Icon.ECONOMY},
-        reveal_effect=PersuasionEffect(2),
-        agent_effect=Effect(
-            effect=lambda game, decision, donor, receiver: (
-                InfluenceEffect(donor, -1).effect(game),
-                SpiceEffect(-2).effect(game),
-                InfluenceEffect(receiver, 2).effect(game),
-            ) if decision else None,
-            choices=[
-                BreakBinChoice(lambda game, decision: True if game.current_player.spice >= 2 else False),
-                Choice(ChoiceType.FACTION,
-                       lambda game, faction: faction in game.current_player.get_changeable_factions(-1)),
-                Choice(ChoiceType.FACTION,
-                       lambda game, faction: faction in game.current_player.get_changeable_factions(2)),
-            ]
-        )
-    ),
-    Card(
-        name="Duncan Idaho",
-        persuasion_cost=4,
-        icons={Icon.SETTLEMENT},
-        reveal_effect=WaterEffect(1) + ForceEffect(2),
-        agent_effect=Effect(
-            effect=lambda game, decision: (WaterEffect(-1), GarrisonEffect(1), CardEffect(1)) if decision else None,
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.water >= 1)]
-        )
-    ),
-    Card(
-        name="Piter De Vries",
-        persuasion_cost=5,
-        icons={Icon.SETTLEMENT, Icon.STATECRAFT},
-        agent_effect=IntrigueEffect(),
-        reveal_effect=PersuasionEffect(3) + ForceEffect(1),
-    ),
-    Card(
-        name="Worm Riders",
-        persuasion_cost=6,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY},
-        factions={Faction.FREMEN},
-        agent_effect=SpiceEffect(2),
-        reveal_effect=ChoicelessEffect(
-            lambda game: (
-                game.current_player.change_force(4) if game.current_player.factions[Faction.FREMEN][
-                                                           'influence'] >= 2 else None,
-                game.current_player.change_force(2) if game.current_player.has_alliance(Faction.FREMEN) else None
-            )
-        )
-    ),
-    Card(
-        name="Space Travel",
-        persuasion_cost=3,
-        icons={Icon.SPACING_GUILD},
-        factions={Faction.SPACING_GUILD},
-        reveal_effect=PersuasionEffect(2),
-        agent_effect=CardEffect(1),
-    ),
-    Card(
-        name="Thufir Hawat",
-        persuasion_cost=5,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.FREMEN, Icon.BENE_GESSERIT, Icon.SPACING_GUILD, Icon.EMPEROR},
-        agent_effect=CardEffect(1),
-        reveal_effect=PersuasionEffect(1) + IntrigueEffect(),
-    ),
-    Card(
-        name="Lady Jessica",
-        persuasion_cost=7,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.STATECRAFT, Icon.BENE_GESSERIT},
-        factions={Faction.BENE_GESSERIT},
-        acquisition_effect=InfluenceEffect(Faction.BENE_GESSERIT, 1),  # ToDo: This should be a faction choice
-        agent_effect=CardEffect(2),
-        reveal_effect=PersuasionEffect(3) + ForceEffect(1),
-    ),
-    Card(
-        name="Smuggler's Thopter",
-        persuasion_cost=4,
-        icons={Icon.ECONOMY},
-        factions={Faction.SPACING_GUILD},
-        agent_effect=ChoicelessEffect(
-            lambda game: CardEffect(2).effect(game) if game.current_player.factions[Faction.SPACING_GUILD][
-                                                           'influence'] >= 2 else None
-        ),
-        reveal_effect=PersuasionEffect(1) + SpiceEffect(1),
-    ),
-    Card(
-        name="Test of Humanity",
-        persuasion_cost=3,
-        icons={Icon.SETTLEMENT, Icon.STATECRAFT, Icon.BENE_GESSERIT},
-        factions={Faction.BENE_GESSERIT},
-        reveal_effect=PersuasionEffect(2),
-        agent_effect=ChoicelessEffect(
-            lambda game: [player.change_in_combat(-1) for player in game.players if player is not game.current_player]
-            # ToDo: this should be a choice retreat or discard
-        )
-    ),
-    Card(
-        name="Stilgar",
-        persuasion_cost=5,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.FREMEN},
-        factions={Faction.FREMEN},
-        agent_effect=WaterEffect(1),
-        reveal_effect=PersuasionEffect(2) + ForceEffect(3),
-    ),
-    Card(
-        name="Guild Bankers",
-        persuasion_cost=3,
-        icons={Icon.STATECRAFT, Icon.SPACING_GUILD, Icon.EMPEROR},
-        factions={Faction.SPACING_GUILD},
-        reveal_effect=PersuasionEffect(3),  # ToDo: This should make Spice must Flow less expensive
-    ),
-    Card(
-        name="Spice Hunter",
-        persuasion_cost=2,
-        icons={Icon.ECONOMY, Icon.FREMEN},
-        factions={Faction.FREMEN},
-        reveal_effect=ChoicelessEffect(
-            lambda game: ((PersuasionEffect(1) + ForceEffect(1)).effect(game),
-                          SpiceEffect(1).effect(game) if game.current_player.faction_cards_in_play(
-                              Faction.FREMEN) > 0 else None)
-        ),
-    ),
-    Card(
-        name="Fedaykin Death Commando",
-        persuasion_cost=3,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY},
-        factions={Faction.FREMEN},
-        agent_effect=RemoveCardEffect(),
-        reveal_effect=ChoicelessEffect(
-            lambda game: (
-                PersuasionEffect(1).effect(game),
-                ForceEffect(3).effect(game) if game.current_player.faction_cards_in_play(
-                    Faction.FREMEN) > 0 else None)
-        ),
-    ),
-    Card(
-        name="Opulence",
-        persuasion_cost=6,
-        icons={Icon.EMPEROR},
-        factions={Faction.EMPEROR},
-        agent_effect=SolariEffect(3),
-        reveal_effect=Effect(
-            effect=lambda game, decision: (
-                PersuasionEffect(1).effect(game),
-                (SolariEffect(-6).effect(game), VictoryEffect(1).effect(game)) if decision else None
-            ),
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.solari >= 6)]
-        ),
-    ),
-    Card(
-        name="Kwisatz Haderach",
-        persuasion_cost=8,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.STATECRAFT, Icon.BENE_GESSERIT, Icon.FREMEN, Icon.SPACING_GUILD,
-               Icon.EMPEROR},
-        agent_effect=CardEffect(1) + AgentEffect(),  # ToDo: This should be a lot more ccmplex
-    ),
-    Card(
-        name="Guild Ambassador",
-        persuasion_cost=4,
-        icons={Icon.STATECRAFT},
-        factions={Faction.SPACING_GUILD},
-        agent_effect=Effect(
-            effect=lambda game, decision: (InfluenceEffect(Faction.SPACING_GUILD, 1).effect(game) if decision else None,
-                                           SpiceEffect(2).effect(game) if not decision else None),
-            choices=[Choice(ChoiceType.BOOLEAN, lambda game, decision: True)]
-        ),
-        reveal_effect=Effect(
-            effect=lambda game, decision: (
-                SpiceEffect(-3).effect(game), VictoryEffect(1).effect(game)) if decision else None,
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.spice >= 3)]
-        ),
-    ),
-    Card(
-        name="Gene Manipulation",
-        persuasion_cost=3,
-        icons={Icon.SETTLEMENT, Icon.STATECRAFT},
-        factions={Faction.BENE_GESSERIT},
-        agent_effect=Effect(
-            effect=lambda game, card: (game.current_player.remove_card(card),
-                                       SpiceEffect(2).effect(game) if game.current_player.faction_cards_in_play(
-                                           Faction.BENE_GESSERIT) > 0 else None),
-            choices=[Choice(
-                ChoiceType.CARD,
-                lambda game, card: game.current_player.is_removable_card(card))]
-        ),
-        reveal_effect=PersuasionEffect(2),
-    ),
-    Card(
-        name="Dr. Yueh",
-        persuasion_cost=1,
-        icons={Icon.SETTLEMENT},
-        agent_effect=CardEffect(1),
-        reveal_effect=PersuasionEffect(1),
-    ),
-    Card(
-        name="Fremen Camp",
-        persuasion_cost=4,
-        icons={Icon.ECONOMY},
-        factions={Faction.FREMEN},
-        reveal_effect=PersuasionEffect(2) + ForceEffect(1),
-        agent_effect=Effect(
-            effect=lambda game, decision: (
-                SpiceEffect(-2).effect(game), GarrisonEffect(3).effect(game)) if decision else None,
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.spice >= 2)]
-        )
-    ),
-    Card(
-        name="Chani",
-        persuasion_cost=5,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY, Icon.FREMEN},
-        factions={Faction.FREMEN},
-        acquisition_effect=WaterEffect(1),
-        reveal_effect=PersuasionEffect(2) + RetreatEffect(12),
-    ),
-    Card(
-        name="Crysknife",
-        persuasion_cost=3,
-        icons={Icon.ECONOMY, Icon.FREMEN},
-        factions={Faction.FREMEN},
-        agent_effect=SolariEffect(1),
-        reveal_effect=ChoicelessEffect(
-            lambda game: (
-                ForceEffect(1).effect(game),
-                InfluenceEffect(Faction.FREMEN, 1).effect(game) if game.current_player.faction_cards_in_play(
-                    Faction.FREMEN) > 0 else None
-            )
-        ),
-    ),
-    Card(
-        name="Choam Dictatorship",
-        persuasion_cost=8,
-        acquisition_effect=InfluenceEffect(Faction.EMPEROR, 1)
-                           + InfluenceEffect(Faction.SPACING_GUILD, 1)
-                           + InfluenceEffect(Faction.BENE_GESSERIT, 1)
-                           + InfluenceEffect(Faction.FREMEN, 1),
-        reveal_effect=SolariEffect(3)
-    ),
-    Card(
-        name="Carryall",
-        persuasion_cost=5,
-        icons={Icon.ECONOMY},
-        reveal_effect=PersuasionEffect(1) + SpiceEffect(1),
-        agent_effect=ChoicelessEffect(
-            lambda game: (
-                SpiceEffect(1).effect(game) if game.current_player.current_location.name == "Imperial Basin" else None,
-                SpiceEffect(2).effect(game) if game.current_player.current_location.name == "Hagga Basin" else None,
-                SpiceEffect(3).effect(game) if game.current_player.current_location.name == "The Great Flat" else None,
-            )
-        )
-    ),
-    Card(
-        name="Bene Gesserit Sister",
-        persuasion_cost=3,
-        icons={Icon.STATECRAFT, Icon.BENE_GESSERIT},
-        factions={Faction.BENE_GESSERIT},
-        reveal_effect=Effect(
-            effect=lambda game, decision: (PersuasionEffect(2).effect(game) if decision else None,
-                                           ForceEffect(2).effect(game) if not decision else None),
-            choices=[Choice(ChoiceType.BOOLEAN, lambda game, decision: True)]
-        )
-    ),
-    Card(
-        name="Bene Gesserit Initiate",
-        persuasion_cost=3,
-        icons={Icon.ECONOMY, Icon.SETTLEMENT, Icon.STATECRAFT},
-        factions={Faction.BENE_GESSERIT},
-        agent_effect=CardEffect(1),
-        reveal_effect=PersuasionEffect(1),
-    ),
-    Card(
-        name="Arrakis Recruiter",
-        persuasion_cost=2,
-        icons={Icon.SETTLEMENT},
-        agent_effect=GarrisonEffect(1),
-        reveal_effect=PersuasionEffect(1) + ForceEffect(1),
-    ),
-    Card(
-        name="Assassination Mission",
-        persuasion_cost=1,
-        reveal_effect=SolariEffect(1) + ForceEffect(1),
-        removal_effect=SolariEffect(4),
-    ),
-    Card(
-        name="Scout",
-        persuasion_cost=1,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY},
-        reveal_effect=PersuasionEffect(1) + ForceEffect(1) + RetreatEffect(2),
-    ),
-    Card(
-        name="The Voice",
-        persuasion_cost=2,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY},
-        factions={Faction.BENE_GESSERIT},
-        reveal_effect=PersuasionEffect(2),
-        agent_effect=Effect(
-            effect=lambda game, location: location.occupy(),
-            choices=[Choice(ChoiceType.LOCATION, lambda game, location: True)]  # ToDo: This should work differently
-        )
-    ),
-    Card(
-        name="Guild Administrator",
-        persuasion_cost=2,
-        icons={Icon.SPACING_GUILD, Icon.ECONOMY},
-        factions={Faction.SPACING_GUILD},
-        agent_effect=RemoveCardEffect(),
-        reveal_effect=PersuasionEffect(1),
-    ),
-    Card(
-        name="Gun Thopter",
-        persuasion_cost=4,
-        icons={Icon.SETTLEMENT, Icon.ECONOMY},
-        agent_effect=ChoicelessEffect(
-            lambda game: [player.change_garrison(-1) for player in game.players if player is not game.current_player]
-        )
-    )
+    reveal_effect=solari_3
+)
+carryall = Card(
+    name="Carryall",
+    persuasion_cost=5,
+    icons={Icon.ECONOMY},
+    agent_effect=carryall_agent,
+    reveal_effect=lambda player: (persuasion_1(player), spice_1(player)),
+)
+bene_gesserit_sister = Card(
+    name="Bene Gesserit Sister",
+    persuasion_cost=3,
+    icons={Icon.STATECRAFT, Icon.BENE_GESSERIT},
+    factions={Faction.BENE_GESSERIT},
+    reveal_effect=bene_gesserit_sister_reveal
+)
+bene_gesserit_initiate = Card(
+    name="Bene Gesserit Initiate",
+    persuasion_cost=3,
+    icons={Icon.ECONOMY, Icon.SETTLEMENT, Icon.STATECRAFT},
+    factions={Faction.BENE_GESSERIT},
+    agent_effect=draw_card_1,
+    reveal_effect=persuasion_1,
+)
+arrakis_recruiter = Card(
+    name="Arrakis Recruiter",
+    persuasion_cost=2,
+    icons={Icon.SETTLEMENT},
+    agent_effect=garrison_1,
+    reveal_effect=lambda player: (persuasion_1(player), force_1(player)),
+)
+assassination_mission = Card(
+    name="Assassination Mission",
+    persuasion_cost=1,
+    reveal_effect=lambda player: (solari_1(player), force_1(player)),
+    removal_effect=solari_4,
+)
+scout = Card(
+    name="Scout",
+    persuasion_cost=1,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY},
+    reveal_effect=lambda player: (persuasion_1(player), force_1(player), retreat_2(player)),
+)
+the_voice = Card(
+    name="The Voice",
+    persuasion_cost=2,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY},
+    factions={Faction.BENE_GESSERIT},
+    agent_effect=the_voice_agent,
+    reveal_effect=persuasion_2,
+)
+guild_administrator = Card(
+    name="Guild Administrator",
+    persuasion_cost=2,
+    icons={Icon.SPACING_GUILD, Icon.ECONOMY},
+    factions={Faction.SPACING_GUILD},
+    agent_effect=remove_card,
+    reveal_effect=persuasion_1,
+)
+gun_thopter = Card(
+    name="Gun Thopter",
+    persuasion_cost=4,
+    icons={Icon.SETTLEMENT, Icon.ECONOMY},
+    agent_effect=gun_thopter_agent,
+    reveal_effect=lambda player: (force_3(player), deploy_1(player)),
+)
 
-]
+cards = [firm_grip,
+         missionaria_protectiva,
+         spice_smugglers,
+         gurney_halleck,
+         liet_kynes,
+         sardaukar_infantry,
+         sietch_reverend_mother,
+         imperial_spy,
+         power_play,
+         sardaukar_legion,
+         other_memory,
+         shifting_allegiances,
+         duncan_idaho,
+         piter_de_vries,
+         worm_riders,
+         space_travel,
+         thufir_hawat,
+         lady_jessica,
+         smugglers_thopter,
+         test_of_humanity_agent,
+         stilgar,
+         guild_bankers,
+         spice_hunter,
+         fedaykin_death_commando,
+         opulence,
+         kwisatz_haderach,
+         guild_ambassador,
+         gene_manipulation,
+         dr_yueh,
+         fremen_camp,
+         chani,
+         crysknife,
+         choam_directorship,
+         carryall,
+         bene_gesserit_sister,
+         bene_gesserit_initiate,
+         arrakis_recruiter,
+         assassination_mission,
+         scout,
+         the_voice,
+         guild_administrator,
+         gun_thopter,
+         ]
 
 
 class ConflictCard:
-    def __init__(self, name: str, tier: int, rewards: List[Effect]):
+    def __init__(self, name: str, tier: int, rewards: List[Callable[['Player'], Any]]):
         self.name = name
         self.tier = tier
         self.rewards = rewards
 
+
+class ConflictCardWithCapture(ConflictCard):
+    def __init__(self, name: str, tier: int, rewards: List[Callable[['Player'], Any]],
+                 capture_location: CaptureLocation):
+        super().__init__(name, tier, rewards)
+        self.capture_location = capture_location
+
     def __repr__(self):
         return f"{self.name} (Tier {self.tier})\t\t{self.rewards}"
 
+
+no_conflict = ConflictCard(
+    name="No Conflict",
+    tier=0,
+    rewards=[no_effect, no_effect, no_effect]
+)
 
 conflict_cards = [
     ConflictCard(
         name='Skirmish I',
         tier=1,
         rewards=[
-            VictoryEffect(1),
-            WaterEffect(1),
-            SpiceEffect(1),
+            victory_point_1,
+            water_1,
+            spice_1,
         ]
     ),
     ConflictCard(
         name='Skirmish II',
         tier=1,
         rewards=[
-            VictoryEffect(1),
-            IntrigueEffect() + SolariEffect(1),
-            SolariEffect(2),
+            victory_point_1,
+            lambda player: (draw_intrigue(player), solari_1(player)),
+            solari_2
         ]
     ),
     ConflictCard(
         name='Skirmish III',
         tier=1,
         rewards=[
-            Effect(
-                effect=lambda game, faction: (
-                    game.current_player.change_influence(faction,
-                                                         1) if game.current_player.has_changeable_factions() else None,
-                    game.current_player.change_solari(2)
-                ),
-                choices=[
-                    Choice(ChoiceType.FACTION,
-                           # every faction allowed, when everything is maxed
-                           lambda game, faction: faction in game.current_player.get_changeable_factions(
-                               1) or not game.current_player.has_changeable_factions())
-                ]
-            ),
-            SolariEffect(3),
-            SolariEffect(2),
+            lambda player: (choose_influence_1(player), solari_2(player)),
+            solari_3,
+            solari_2,
         ]
     ),
     ConflictCard(
         name='Skirmish IV',
         tier=1,
         rewards=[
-            Effect(
-                effect=lambda game, faction: (
-                    game.current_player.change_influence(faction,
-                                                         1) if game.current_player.has_changeable_factions() else None,
-                    game.current_player.change_spice(1)
-                ),
-                choices=[
-                    Choice(ChoiceType.FACTION,
-                           # every faction allowed, when everything is maxed
-                           lambda game, faction: faction in game.current_player.get_changeable_factions(
-                               1) or not game.current_player.has_changeable_factions())
-                ]
-            ),
-            SpiceEffect(2),
-            SpiceEffect(1),
+            lambda player: (choose_influence_1(player), solari_1(player)),
+            spice_2,
+            spice_1,
         ]
     ),
-
+    ConflictCard(
+        name='Desert Power',
+        tier=2,
+        rewards=[
+            lambda player: (victory_point_1(player), water_1(player)),
+            lambda player: (water_1(player), spice_1(player)),
+            spice_1,
+        ]
+    ),
+    ConflictCard(
+        name='Cloak and Dagger',
+        tier=2,
+        rewards=[
+            lambda player: (choose_influence_1(player), draw_intrigue(player), draw_intrigue(player)),
+            lambda player: (draw_intrigue(player), spice_1(player)),
+            cloak_and_dager_3rd,
+        ]
+    ),
+    ConflictCard(
+        name='Guild Bank Raid',
+        tier=2,
+        rewards=[
+            solari_6,
+            solari_4,
+            solari_2,
+        ]
+    ),
+    ConflictCard(
+        name='Machinations',
+        tier=2,
+        rewards=[
+            machinations_1st,
+            lambda player: (water_1(player), solari_2(player)),
+            water_1,
+        ]
+    ),
+    ConflictCard(
+        name='Raid Stockpiles',
+        tier=2,
+        rewards=[
+            lambda player: (draw_intrigue(player), spice_3(player)),
+            spice_2,
+            spice_1,
+        ]
+    ),
+    ConflictCard(
+        name='Terrible Purpose',
+        tier=2,
+        rewards=[
+            lambda player: (victory_point_1(player), remove_card(player)),
+            lambda player: (water_1(player), spice_1(player)),
+            spice_1,
+        ]
+    ),
+    ConflictCard(
+        name='Sort Through The Chaos',
+        tier=2,
+        rewards=[
+            lambda player: (get_mentat(player), draw_intrigue(player), solari_2(player)),
+            lambda player: (draw_intrigue(player), solari_2(player)),
+            solari_2,
+        ]
+    ),
+    ConflictCardWithCapture(
+        name='Secure Imperial Basin',
+        tier=2,
+        capture_location=imperial_basin,
+        rewards=[
+            victory_point_1,
+            water_2,
+            water_1,
+        ]
+    ),
+    ConflictCardWithCapture(
+        name='Siege of Arrakeen',
+        tier=2,
+        capture_location=arrakeen,
+        rewards=[
+            victory_point_1,
+            solari_4,
+            solari_2,
+        ]
+    ),
+    ConflictCardWithCapture(
+        name='Siege of Carthag',
+        tier=2,
+        capture_location=carthag,
+        rewards=[
+            victory_point_1,
+            lambda player: (draw_intrigue(player), spice_1(player)),
+            spice_1,
+        ]
+    ),
+    ConflictCard(
+        name='Grand Vision',
+        tier=3,
+        rewards=[
+            lambda player: (choose_influence_2(player), draw_intrigue(player)),
+            lambda player: (draw_intrigue(player), spice_3(player)),
+            spice_3,
+        ]
+    ),
+    ConflictCardWithCapture(
+        name='Battle For Carthag',
+        tier=3,
+        capture_location=carthag,
+        rewards=[
+            victory_point_2,
+            lambda player: (draw_intrigue(player), spice_3(player)),
+            spice_3,
+        ]
+    ),
+    ConflictCardWithCapture(
+        name='Battle For Imperial Basin',
+        tier=3,
+        capture_location=imperial_basin,
+        rewards=[
+            victory_point_2,
+            spice_5,
+            spice_3,
+        ]
+    ),
+    ConflictCardWithCapture(
+        name='Battle For Arrakeen',
+        tier=3,
+        capture_location=arrakeen,
+        rewards=[
+            victory_point_2,
+            battle_for_arrakeen_2nd,
+            lambda player: (draw_intrigue(player), solari_2(player)),
+        ]
+    ),
 ]
 
 
 class Intrigue:
-    def __init__(self, name: str, effect: Effect, requirement: Requirement = noRequirement,
-                 intrigue_type: IntrigueType = IntrigueType.PLOT, copies: int = 10):
+    def __init__(self, name: str, effect: Callable[['Player'], Any],
+                 intrigue_types=None, copies: int = 10):
+        if intrigue_types is None:
+            intrigue_types = {IntrigueType.PLOT}
         self.name: str = name
-        self.effect: Effect = effect
-        self.requirement: Requirement = requirement
-        self.intrigue_type: IntrigueType = intrigue_type
+        self.effect: Callable[['Player'], Any] = effect
+        self.intrigue_types: Set[IntrigueType] = intrigue_types
         self.copies = copies
 
     def get_instances(self):
         return [
-            IntrigueInstance(i, self.name, self.effect, self.requirement, self.intrigue_type)
+            IntrigueInstance(i, self.name, self.effect, self.intrigue_types)
             for i in range(self.copies)
         ]
 
@@ -727,131 +738,176 @@ class Intrigue:
 
 
 class IntrigueInstance:
-    def __init__(self, id: int, name: str, effect: Effect, requirement, intrigue_type: IntrigueType):
+    def __init__(self, id: int, name: str, effect: Callable[['Player'], Any], intrigue_types: Set[IntrigueType]):
         self.name: str = name
-        self.effect: Effect = effect
-        self.requirement: Requirement = requirement
-        self.intrigue_type: IntrigueType = intrigue_type
+        self.effect: Callable[['Player'], Any] = effect
+        self.intrigue_types: Set[IntrigueType] = intrigue_types
         self.id = id
 
-    def is_playable(self, game: 'Game'):
-        return self.requirement.is_met(game)
     def __repr__(self):
         return self.name
 
-noIntrigue = Intrigue("no Intrigue", noEffect)
+
+no_intrigue = Intrigue("no Intrigue", no_effect)
 
 plots = [
     Intrigue(
-        "Dispatch an Envoy ",
-        ChoicelessEffect(
-            effect=lambda game: game.current_player.add_icons(
-                [Icon.EMPEROR, Icon.SPACING_GUILD, Icon.BENE_GESSERIT, Icon.FREMEN])
-        )
+        name="Dispatch an Envoy ",
+        effect=dispatch_an_envoy
     ),
     Intrigue(
         name='Secrets Of The Sisterhood',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_influence(Faction.BENE_GESSERIT, 1)),
+        effect=influence_bene_gesserit_1,
     ),
     Intrigue(
         name='Favored Subjects',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_influence(Faction.EMPEROR, 1)),
+        effect=influence_emperor_1,
     ),
     Intrigue(
         name='Know Their Ways',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_influence(Faction.FREMEN, 1)),
+        effect=influence_fremen_1,
     ),
     Intrigue(
         name='Guild Authorization',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_influence(Faction.SPACING_GUILD, 1)),
+        effect=influence_spacing_guild_1,
     ),
     Intrigue(
         name='Windfall',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_solari(2)),
+        effect=solari_2,
     ),
     Intrigue(
         name='Water Peddlers Union',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_water(1)),
+        effect=water_1,
     ),
     Intrigue(
         name='Charisma',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_persuation(2)),
+        effect=persuasion_2,
     ),
     Intrigue(
         name='Rapid Mobilization',
-        effect=ChoicelessEffect(lambda game: game.current_player.change_to_deploy(game.max_troops)),
+        effect=deploy_all,
     ),
     Intrigue(
         name='Reinforcements',
-        effect=Effect(
-            effect=lambda game, decision: (
-                game.current_player.change_solari(-3),
-                game.current_player.change_garrison(3),
-                game.current_player.change_to_deploy(3) if game.current_player.is_revealing_turn else None
-            ) if decision else None,
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.solari >= 3)]
-        ),
+        effect=reinforcements,
     ),
     Intrigue(
         name='The Sleeper Must Awaken',
-        effect=Effect(
-            effect=lambda game, decision:
-            (game.current_player.change_spice(-4), game.current_player.change_victory_points(1)) if decision else None,
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.spice >= 4)]
-        ),
+        effect=the_sleeper_must_awaken,
     ),
     Intrigue(
         name='Choam Shares',
-        effect=Effect(
-            effect=lambda game, decision:
-            (game.current_player.change_solari(-7), game.current_player.change_victory_points(1)) if decision else None,
-            choices=[Choice(ChoiceType.BOOLEAN,
-                            lambda game, decision: True if not decision else game.current_player.solari >= 7)]
-        ),
+        effect=choam_shares,
     ),
     Intrigue(
         name='Refocus',
-        effect=ChoicelessEffect(lambda game: (
-            game.current_player.deck.extend(game.current_player.discard_pile),
-            random.shuffle(game.current_player.deck),
-            game.current_player.draw()
-        )),
+        effect=refocus,
     ),
     Intrigue(
         name='Bribery',
-        effect=Effect(
-            effect=lambda game, decision, faction: (
-                game.current_player.change_solari(-2),
-                game.current_player.change_influence(faction, 1)
-            ) if decision else None,
-            choices=[
-                BreakBinChoice(
-                    lambda game, decision: True if not decision else game.current_player.solari >= 2,
-                ),
-                Choice(ChoiceType.FACTION,
-                       lambda game, faction: faction in game.current_player.get_changeable_factions(1)
-                       )
-            ]
-        ),
+        effect=bribery,
     ),
     Intrigue(
         name='Double Cross',
-        effect=Effect(
-            effect=lambda game, decision, player: (
-                game.current_player.change_solari(-1),
-                player.change_in_combat(-1),
-                game.current_player.change_to_deploy(1)
-            ) if decision else None,
-            choices=[
-                BreakBinChoice(
-                    lambda game, decision: True if not decision else game.current_player.solari >= 1,
-                ),
-                Choice(ChoiceType.PLAYER,
-                       lambda game, faction: faction in game.current_player.get_changeable_factions(1)
-                       )
-            ]
-        ),
+        effect=double_cross,
     ),
+    Intrigue(
+        name='Infiltrate',
+        effect=infiltrate,
+    ),
+    Intrigue(
+        name='Councilor\'s Dispensation',
+        effect=councilors_dispensation,
+    ),
+    Intrigue(
+        name='Double Cross',
+        effect=double_cross,
+    ),
+    Intrigue(
+        name='Water of Life',
+        effect=water_of_life,
+    ),
+    Intrigue(
+        name='Poisons Snooper',
+        effect=poisons_snooper,
+    ),
+    Intrigue(
+        name='Double Cross',
+        effect=double_cross,
+    ),
+    Intrigue(
+        name='Urgent  Mission',
+        effect=double_cross,
+    ),
+    Intrigue(
+        name='Recruitment  Mission',
+        effect=recruitment_mission,
+    ),
+    Intrigue(
+        name='Bindu Suspension',
+        effect=bindu_suspension,
+    ),
+    Intrigue(
+        name='Calculated Hire',
+        effect=recruitment_mission,
+    ),
+    Intrigue(
+        name='Bypass Protocol',
+        effect=bypass_protocol,
+    ),
+    # Combat
+
+    Intrigue(
+        name='Ambush',
+        intrigue_types={IntrigueType.COMBAT},
+        effect=force_4
+    ),
+    Intrigue(
+        name='Ambush',
+        intrigue_types={IntrigueType.COMBAT},
+        effect=staged_incident
+    ),
+    Intrigue(
+        name='Private Army',
+        intrigue_types={IntrigueType.COMBAT},
+        effect=private_army
+    ),
+    Intrigue(
+        name='Allied Armada',
+        intrigue_types={IntrigueType.COMBAT},
+        effect=allied_armada
+    ),
+    Intrigue(
+        name='Demand Respect',
+        intrigue_types={IntrigueType.COMBAT},
+        effect=demand_respect
+    ),
+    Intrigue(
+        name='To the Victor...',
+        intrigue_types={IntrigueType.COMBAT},
+        effect=to_the_victor
+    ),
+    Intrigue(
+        name='Tiebreaker',
+        intrigue_types={IntrigueType.COMBAT, IntrigueType.FINALE},
+        effect=tiebreaker
+    ),
+    Intrigue(
+        name='Corner the Market',
+        intrigue_types={IntrigueType.FINALE},
+        effect=to_the_victor
+    ),
+
+    # Finale
+    Intrigue(
+        name='Corner the Market',
+        intrigue_types={IntrigueType.FINALE},
+        effect=corner_the_market
+    ),
+    Intrigue(
+        name='Plans Within Plans',
+        intrigue_types={IntrigueType.FINALE},
+        effect=plans_within_plans
+    ),
+
 ]

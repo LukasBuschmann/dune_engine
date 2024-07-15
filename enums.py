@@ -1,11 +1,13 @@
 from enum import Enum
 
+
+# ToDo: no faction choosable?
 class Faction(Enum):
     EMPEROR = "Emperor"
     FREMEN = "Fremen"
     SPACING_GUILD = "Spacing Guild"
     BENE_GESSERIT = "Bene Gesserit"
-    # NO_FACTION = "No Faction"
+
 
 class Icon(Enum):
     EMPEROR = "Emperor"
@@ -31,11 +33,13 @@ class ChoiceType(Enum):
     FACTION = 'Faction'
     PLAYER = 'Player'
 
+
 class Commander(Enum):
     PAUL_ARTREIDES = "Paul Artreides"
     THE_BEAST = "The Beast"
     BARON_VLADIMIR_HARKONNEN = "Baron Vladimir Harkonnen"
     DUKE_LETO_ARTREIDES = "Duke Leto Artreides"
+
 
 class GameState(Enum):
     AGENT = 'Agent'
@@ -43,10 +47,30 @@ class GameState(Enum):
     CONFLICT_OVER = 'Conflict Over'
     FINALE = 'Finale'
 
+
 class IntrigueType(Enum):
     PLOT = 'Plot'
-    CONFLICT = 'Conflict'
+    COMBAT = 'Combat'
     FINALE = 'Finale'
+
+
+class Statics(Enum):
+    MAX_TROOPS = 12
+    MAX_INFLUENCE = 6
+
+
+class CardName(Enum):
+    SEEK_ALLIES = "Seek Allies"
+    IMPERIAL_SPY = "Imperial Spy"
+    POWER_PLAY = "Power Play"
+    THE_SPICE_MUST_FLOW = "The Spice Must Flow"
+
+class LocationName(Enum):
+    IMPERIAL_BASIN = "Imperial Basin"
+    HAGGA_BASIN = "Hagga Basin"
+    THE_GREAT_FLAT = "The Great Flat"
+    AGENT_RESERVES = "Agent Reserves"
+    NO_LOCATION = "No Location"
 
 class TurnType(Enum):
     """

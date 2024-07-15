@@ -1,12 +1,12 @@
-from transitions import Machine
-from typing import List, Set, ClassVar, Any
-import random
 import itertools
-from Cards import start_cards, noIntrigue, noCard
-import Choice
-from Location import faction_rewards
-from enums import Icon, Faction, Commander, IntrigueType, GameState, TurnType
-import Effect
+import random
+from typing import List, Set
+
+from enums import Commander, Faction, Icon, IntrigueType, TurnType, Statics
+from Cards import start_cards, no_card, kwisatz_haderach, no_intrigue, CardInstance, IntrigueInstance
+from Choice import RandomResolver, Resolver, intrigue_choice
+from Location import no_location, faction_rewards, Location
+
 
 class Player(object):
 
@@ -14,7 +14,7 @@ class Player(object):
         self.game: 'Game' = game
         self.commander: Commander = commander
 
-        self.resolver: 'Resolver' = Choice.RandomResolver()
+        self.resolver: 'Resolver' = RandomResolver()
 
         self.victory_points = 0
 
@@ -26,50 +26,54 @@ class Player(object):
         self.agents = 2
         self.max_agents = 2
 
-        self.factions = {faction: {'influence': 0, 't1_reward_received': False, "t2_reward_received": False} for faction in Faction}
+        # ToDo: change this to a object
+        self.factions = {faction: {'influence': 0, 't1_reward_received': False, "t2_reward_received": False} for faction
+                         in Faction}
         self.alliances = set()
 
         self.in_high_council = False
 
         self.garrison: int = 2
         self.in_combat: int = 0
-        self.to_deploy: int = 0
-        self.to_retreat: int = 0
+        self.deployable: int = 0
+        self.retractable: int = 0
         self.force: int = 0
 
         self.icons: Set[Icon] = set()
 
-        self.deck: List['CardInstance'] = list(itertools.chain.from_iterable(card.get_instances() for card in start_cards))
+        self.deck: List['CardInstance'] = list(
+            itertools.chain.from_iterable(card.get_instances() for card in start_cards))
         random.shuffle(self.deck)
+
         self.played_cards: List['CardInstance'] = []
+        self.revealed_cards: List['CardInstance'] = []
         self.discard_pile: List['CardInstance'] = []
-
-        self.current_card: 'CardInstance' = None
         self.hand_cards: List['CardInstance'] = []
-        [self.draw() for _ in range(5)]
 
-        self.current_intrigue: 'IntrigueInstance' = None
         self.intrigues: List['IntrigueInstance'] = []
 
-        self.current_location: 'Location' = None
+        self.current_location: 'Location' = no_location
         self.revealed: bool = False
         self.is_revealing_turn: bool = False
-        self.intrigue_origin_node: str = None
+        self.passed_combat_intrigue = False
 
-        self.current_choicing: str = None
-        self.open_choices: List[Any] = []
-        self.decided_choices: List[Any] = []
-        self.open_location_choices: List[Any] = []
-        self.decided_location_choices: List[Any] = []
+        self.agent_on_combat_location = False
 
-        self.has_played_intrigue: bool = False
-        self.has_resolved_conflict: bool =  False
-        self.conflict_ranking: int = None
-        self.str_out = ""
-        self.turn_type: TurnType = TurnType.UNDECIDED
+        self.on_win = []
+
+        self.get_mentat = False
+        self.guild_bankers = False
+        self.voice = False
+        self.infiltrate = False
+        self.recruitment = False
+        self.bindu_suspension = False
+
+        self.in_turn = False
+        self.in_finale = False
 
     def __repr__(self):
         return self.commander.name
+
     def __str__(self):
         return self.commander.name
 
@@ -79,82 +83,55 @@ class Player(object):
             self.hand_cards.append(card)
         else:
             raise Exception("Card not in discard pile")
+
     def draw_foldspace(self):
         self.game.shop.draw_shop_foldspace(self)
+
     def is_in_high_council(self):
         return self.in_high_council
+
+    def enter_high_council(self):
+        self.in_high_council = True
+        self.change_persuasion(2)
+
+    # ToDo: combine to one function
     def add_mentat(self):
         self.game.mentat_available = False
         self.agents += 1
 
-    def add_agent(self):
-        self.agents += 1
+    def try_add_mentat(self):
+        if self.game.mentat_available:
+            self.add_mentat()
 
-    def add_max_agent(self):
+    def add_swordmaster(self):
         self.max_agents += 1
-    def remove_agent(self):
-        self.agents -= 1
-
-    def faction_cards_in_play(self, faction: Faction):
-        return len(list(filter(lambda card: faction in card.factions, self.played_cards)))
-
-    def is_in_reveal_turn(self):
-        return self.is_revealing_turn
-    def set_conflict_ranking(self, ranking: int):
-        self.conflict_ranking = ranking
-        self.str_out += f"\nConflict Ranking: {ranking}"
-
-    def has_playable_card_with_agent_effect(self, effect_type: ClassVar):
-        for card in self.hand_cards:
-            if card.agent_effect.__class__ == effect_type:
-                if isinstance(card.agent_effect, Effect.EffectWithRequirement):
-                    effect: Effect.EffectWithRequirement = card.agent_effect
-                    if effect.requirement_met(self.game):
-                        return True
-                else:
-                    return True
-        return False
+        self.agents += 1
 
     def has_revealed(self):
         return self.revealed
-    def has_alliance(self, faction: Faction):
-        return faction in self.alliances
-    def enter_high_council(self):
-        self.in_high_council = True
-        self.persuasion += 2
 
+    # ToDo: allow overshoot
     def get_changeable_factions(self, n):
-       return set(map(lambda t: t[0], filter(lambda faction:  0 <= faction[1]['influence'] + n <= self.game.max_influence, self.factions.items())))
+        return set(map(lambda t: t[0],
+                       filter(lambda faction: 0 <= faction[1]['influence'] + n <= Statics.MAX_INFLUENCE,
+                              self.factions.items())))
 
     def can_change_faction(self, faction: Faction, n: int):
         return faction in self.get_changeable_factions(n)
-    def has_changeable_factions(self):
-        return len(self.get_changeable_factions(1)) != 0
 
     def change_victory_points(self, n: int):
         self.victory_points += n
-        if n > 0:
-            self.str_out += '\n' + (f"+Victory Points: {n}")
-        else:
-            self.str_out += '\n' + (f"-Victory Points: {n}")
+
     def change_water(self, n: int):
         self.water += n
-        if n > 0:
-            self.str_out += '\n' + (f"+Water: {n}")
-        else:
-            self.str_out += '\n' + (f"-Water: {n}")
 
-
+    # todo: should this be managed in the player?
     def change_influence(self, faction: Faction, n: int):
         if self.factions[faction]['influence'] + n > self.game.max_influence:
             return
         if self.factions[faction]['influence'] + n < 0:
             raise Exception("Influence cannot be negative!")
         self.factions[faction]['influence'] += n
-        if n > 0:
-            self.str_out += '\n' + (f"+{faction}: {n}")
-        else:
-            self.str_out += '\n' + (f"-{faction}: {n}")
 
         influence = self.factions[faction]['influence']
         get_alliance = True
@@ -165,7 +142,7 @@ class Player(object):
             self.remove_alliance(faction)
         if influence >= 4:
             if not self.factions[faction]['t2_reward_received']:
-                faction_rewards[faction].effect(self.game)
+                faction_rewards[faction](self)
                 self.factions[faction]['t2_reward_received'] = True
             for i, player in enumerate(self.game.players):
                 if player is self:
@@ -183,22 +160,8 @@ class Player(object):
                 player.remove_alliance(faction)
             self.add_alliance(faction)
 
-
-    def has_no_removable_cards(self):
-        return len(self.hand_cards) == 0 and len(self.played_cards) == 0 and len(self.discard_pile) == 0
-    def is_removable_card(self, card: 'CardInstance'):
-        return card in self.hand_cards or card in self.played_cards or card in self.discard_pile or self.has_no_removable_cards()
-
-    def try_steal_intrigues(self):
-        for player in self.game.players:
-            if player is self:
-                continue
-            if len(player.intrigues) > 3:
-                random.shuffle(player.intrigues)
-                self.intrigues.append(player.intrigues.pop())
-
     def remove_card(self, card: 'CardInstance'):
-        if self.has_no_removable_cards():
+        if card is no_card:
             return
         if card in self.hand_cards:
             self.hand_cards.remove(card)
@@ -206,19 +169,23 @@ class Player(object):
             self.played_cards.remove(card)
         elif card in self.discard_pile:
             self.discard_pile.remove(card)
-        card.removal_effect.execute(self.game, [])
+        card.removal_effect(self)
 
+    def remove_deck_top(self):
+        self.deck.pop()
 
     def remove_alliance(self, faction: Faction):
         if faction in self.alliances:
             self.alliances.remove(faction)
-            self.str_out += '\n' + (f"--Alliance: {faction}")
+
     def add_alliance(self, faction: Faction):
         if faction not in self.alliances:
             self.alliances.add(faction)
-            self.str_out += '\n' + (f"++Alliance: {faction}")
-    def add_icons(self, icons: List[Icon]):
-        self.icons.update(icons)
+
+    # ToDo: does this really work?
+    def add_icons(self, new_icons: Set[Icon]):
+        self.icons.update(new_icons)
+
     def draw(self, n=1):
         for _ in range(n):
             if len(self.deck) > 0:
@@ -229,339 +196,58 @@ class Player(object):
                 self.deck = self.discard_pile
                 self.discard_pile = []
 
+    def discard(self, card: 'CardInstance'):
+        self.hand_cards.remove(card)
+        self.discard_pile.append(card)
+
     def change_force(self, n: int):
         self.force += n
-        if n > 0:
-            self.str_out += '\n' + (f"+Force: {n}")
-        else:
-            self.str_out += '\n' + (f"-Force: {n}")
 
     def change_persuasion(self, n: int):
         self.persuasion += n
-        if n > 0:
-            self.str_out += '\n' + (f"+Persuasion: {n}")
-        else:
-            self.str_out += '\n' + (f"-Persuasion: {n}")
 
-    def change_spice_solari(self, spice: int, solari: int):
-        self.change_spice(spice)
-        self.change_solari(solari)
     def change_spice(self, n: int):
         self.spice += n
-        if n > 0:
-            self.str_out += '\n' + (f"+Spice: {n}")
-        else:
-            self.str_out += '\n' + (f"-Spice: {n}")
 
     def change_solari(self, n: int):
         self.solari += n
-        if n > 0:
-            self.str_out += '\n' + (f"+Money: {n}")
-        else:
-            self.str_out += '\n' + (f"-Money: {n}")
 
     def change_garrison(self, n: int):
         if self.garrison + n < 0 or self.garrison + n > self.game.max_troops:
             return
 
         self.garrison += n
-        if n > 0:
-            self.str_out += '\n' + (f"+Garrison: {n}")
-        else:
-            self.str_out += '\n' + (f"-Garrison: {n}")
+        if self.agent_on_combat_location:
+            self.change_to_deploy(n)
 
     def change_to_deploy(self, n: int):
-        self.to_deploy += n
-        if n > 0:
-            self.str_out += '\n' + (f"+To Deploy: {n}")
-        else:
-            self.str_out += '\n' + (f"-To Deploy: {n}")
+        self.deployable += n
+
+    def change_to_retreat(self, n: int):
+        self.retractable += n
 
     def change_in_combat(self, n: int):
         if self.in_combat + n < 0:
             return
         if self.in_combat > self.game.max_troops:
             raise Exception("In Combat cannot be higher than max troops")
-        self.in_combat += n
-        self.force += 2*n
-        if n > 0:
-            self.str_out += '\n' + (f"+In Combat: {n}")
-            self.str_out += '\n' + (f"+Force: {n}")
-        else:
-            self.str_out += '\n' + (f"-In Combat: {n}")
-            self.str_out += '\n' + (f"-Force: {n}")
 
-
-    def change_to_retreat(self, n: int):
-        self.to_retreat += n
-        if n > 0:
-            self.str_out += '\n' + (f"+To Retreat: {n}")
-        else:
-            self.str_out += '\n' + (f"-To Retreat: {n}")
-
-    def has_hand_cards(self):
-        return len(self.hand_cards) != 0
-
-    def can_change_troop_count(self, n: int):
-        if self.game.game_state != GameState.AGENT:
-            return False
-        if n > 0:
-            return self.to_deploy >= n and self.garrison >= n
-        else:
-            n = -n
-            return self.to_retreat >= n and self.in_combat >= n
-    def deploy(self, n: int):
-        self.to_deploy -= n
-        self.garrison -= n
-        self.in_combat += n
-
-    def was_last_state(self, state: str):
-        return self.intrigue_origin_node == state
-
-    def can_buy(self, card: 'CardInstance'):
-        return self.game.shop.shop_can_buy(card, self)
-
-    def buy(self, card: 'CardInstance'):
-        self.game.shop.shop_buy(card, self)
+        new_in_combat = self.in_combat + n
+        self.in_combat = new_in_combat if new_in_combat <= self.game.max_troops else self.game.max_troops
+        # ToDo: separate force and troops
+        self.force += 2 * n
 
     def draw_intrigue(self):
         self.game.shop.draw_intrigue(self)
 
-
-
-
-    def reveal(self):
-        self.revealed = True
-        self.is_revealing_turn = True
-        self.current_choicing = 'reveal'
-
-    def done_reveal(self):
-        self.current_choicing = None
-
-    def can_return_to_node(self, node: str):
-        return self.intrigue_origin_node == node
-
-    def intrigue_is_playable(self, intrigue: 'IntrigueInstance'):
-        if not intrigue in self.intrigues:
-            return False
-
-        allowed_intrigues = [
-            (IntrigueType.PLOT, GameState.AGENT),
-            (IntrigueType.CONFLICT, GameState.IN_CONFLICT),
-            (IntrigueType.FINALE, GameState.FINALE)
-        ]
-        if (intrigue.intrigue_type, self.game.state) not in allowed_intrigues:
-            return False
-
-        return intrigue.precondition.is_met(self.game)
-
-
-
-    def is_playing_trivial_card(self):
-        return self.current_card.agent_effect.__class__ == Effect.Effect
-
-    def play_current_card(self):
-        self.current_card.play(self.game)
-        self.current_card = None
-        self.current_location = None
-
-    def has_playable_intrigue(self):
-        for intrigue in self.intrigues:
-            if self.intrigue_is_playable(intrigue):
-                return True
-        return False
-
-    def set_intrigue_origin_node(self, node: str):
-        self.intrigue_origin_node = node
-
-    def has_playable_card_and_agent(self):
-        if self.agents == 0:
-            return False
-        for card in self.hand_cards:
-            if self.is_playable_card(card):
-                return True
-        return False
-    def location_available_for_card(self, location: 'Location', card: 'CardInstance'):
-            return (location.requirement.is_met(self.game)
-                    and len(location.icons.intersection(card.icons.union(self.icons))) != 0
-                    and not location.is_occupied)
-    def location_available(self, location: 'Location'):
-        return location.requirement.is_met(self.game) and not location.is_occupied and len(location.icons.intersection(self.icons)) != 0
-
-    def is_playable_card(self, card: 'CardInstance'):
-        if not card in self.hand_cards:
-            return False
-        for location in self.game.locations:
-            if self.location_available_for_card(location, card):
-                return True
-        return False
-
-    def on_player_swap(self):
-        self.is_revealing_turn = False
-        if not self.game.game_state == GameState.IN_CONFLICT:
-            self.has_played_intrigue = False
-
-        if self.game.game_state == GameState.CONFLICT_OVER:
-            self.agents = self.max_agents
-            self.to_deploy = 0
-            self.in_combat = 0
-            self.to_retreat = 0
-            self.persuasion = 2 if self.in_high_council else 0
-            self.discard_pile.extend(self.played_cards)
-            self.played_cards = []
-            if len(self.hand_cards) != 0:
-                raise Exception("Player still has cards in hand after turn!")
-            [self.draw() for _ in range(5)]
-
-
-    # Picking
-    def pick_intrigue(self, plot: 'PlotIntrigue'):
-        self.current_intrigue = plot
-        self.intrigues.remove(plot)
-        self.has_played_intrigue = True
-        if plot.effect.precondition(self.game):
-            self.open_choices = plot.effect.choices
-        self.current_choicing = 'plot'
-
-    def pick_card(self, card: 'CardInstance'):
-        self.current_card = card
-        self.hand_cards.remove(card)
-        self.played_cards.append(card)
-        if card.agent_effect.precondition(self.game):
-            self.open_choices = card.agent_effect.choices
-        self.icons.update(card.icons)
-
-    def pick_location(self, location: 'Location'):
-        self.current_location = location
-        if location.effect.precondition(self.game):
-            self.open_location_choices = location.effect.choices
-        location.occupy()
-        location.requirement.fulfill(self.game)
-        if len(location.effect.choices) != 0:
-            self.current_choicing = 'location'
-        else:
-            self.current_choicing = 'agent'
-
-    def pick_conflict_reward(self):
-        self.current_choicing = 'conflict'
-        if self.game.current_player.conflict_ranking >= self.game.num_players - 1:
-            return
-        self.open_choices = self.game.get_current_conflict().rewards[self.conflict_ranking].choices
-
-    def reveal_current_card(self):
-        self.current_card = self.hand_cards.pop()
-        if self.current_card.reveal_effect.precondition(self.game):
-            self.open_choices = self.current_card.reveal_effect.choices
-
-    # Choicing
-    def has_choices(self):
-        return len(self.open_choices) != 0
-    def has_no_choices(self):
-        return len(self.open_choices)== 0
-    def has_location_choices(self):
-        return len(self.open_location_choices) != 0
-    def has_no_location_choices(self):
-        return len(self.open_location_choices) == 0
-
-    def can_evaluate_intrigue(self, node: str):
-        return self.has_no_choices() and self.current_choicing == 'plot' and self.can_return_to_node(node)
-    def can_evaluate_reveal(self):
-        return self.has_no_choices() and self.current_choicing == 'reveal'
-    def can_evaluate_agent_location(self):
-        return self.has_no_choices() and self.has_no_location_choices() and self.current_choicing == 'agent'
-
-    def can_make_choice(self, choice: Any, choice_type: 'ChoiceType'):
-        if len(self.open_choices) == 0 or self.current_choicing == 'location':
-            return False
-        return self.open_choices[0].is_allowed(choice, choice_type, self.game)
-
-    def can_make_location_choice(self, choice: Any, choice_type: 'ChoiceType'):
-        if len(self.open_location_choices) == 0 or self.current_choicing != 'location':
-            return False
-        return self.open_location_choices[0].is_allowed(choice, choice_type, self.game)
-
-
-    def make_choice(self, choice: Any):
-        evaluated_choice = self.open_choices[0]
-        self.decided_choices.append(choice)
-
-        if evaluated_choice.triggers_break(self.game):
-            self.open_choices = []
-        else:
-            self.open_choices = self.open_choices[1:]
-
-    def make_location_choice(self, choice: Any):
-        evaluated_choice = self.open_location_choices[0]
-        self.decided_location_choices.append(choice)
-
-        if evaluated_choice.triggers_break(self.game):
-            self.open_location_choices = []
-        else:
-            self.open_location_choices = self.open_location_choices[1:]
-
-        if self.has_no_location_choices():
-            self.current_choicing = 'agent'
-
-
-    def evaluate_choices_agent_location(self):
-        if self.current_card.agent_effect.precondition(self.game):
-            self.current_card.agent_effect.execute(self.game, self.decided_choices)
-        if self.current_location.effect.precondition(self.game):
-            self.current_location.effect.execute(self.game, self.decided_location_choices)
-        self.current_location.occupy()
-        self.decided_choices = []
-        self.decided_location_choices = []
-        self.current_card = None
-        self.current_location = None
-        self.current_choicing = None
-        self.icons = set()
-
-    def evaluate_choices_reveal(self):
-        if self.current_card.reveal_effect.precondition(self.game):
-            self.current_card.reveal_effect.execute(self.game, self.decided_choices)
-        self.played_cards.append(self.current_card)
-        self.decided_choices = []
-        self.current_card = None
-
-    def evaluate_choices_intrigue(self):
-        if self.current_intrigue.effect.precondition(self.game):
-            self.current_intrigue.effect.execute(self.game, self.decided_choices)
-        self.current_intrigue = None
-        self.current_choicing = None
-        self.intrigue_origin_node = None
-        self.decided_choices = []
-
-    def evaluate_choices_conflict(self):
-        if self.game.current_player.conflict_ranking < self.game.num_players - 1:
-            self.game.get_current_conflict().rewards[self.conflict_ranking].execute(self.game, self.decided_choices)
-        self.has_resolved_conflict = True
-        self.current_choicing = None
-        self.decided_choices = []
-        self.revealed = False
-
-
-    # ================= V2 =====================
-
-
     def has_playable_card(self) -> bool:
         for card in self.hand_cards:
-            if card.is_playable_with(self.game, card):
+            if card.is_playable(self, card):
                 return True
         return False
 
-    def has_playable_plot(self) -> bool:
-        for plot in self.intrigues:
-            if plot.intrigue_type == IntrigueType.PLOT:
-                if plot.requirement.is_met(self.game):
-                    return True
-        return False
-
-    def get_playable_intrigues(self, intrigue_type: IntrigueType) -> List['IntrigueInstance']:
-        playable_plots = []
-        for plot in self.intrigues:
-            if plot.intrigue_type == intrigue_type:
-                if plot.requirement.is_met(self.game):
-                    playable_plots.append(plot)
+    def get_all_cards(self) -> List['CardInstance']:
+        return self.hand_cards + self.played_cards + self.revealed_cards + self.discard_pile + self.deck
 
     def get_turn_types(self) -> List[TurnType]:
         allowed_turns = []
@@ -571,81 +257,158 @@ class Player(object):
             allowed_turns.append(TurnType.REVEAL)
         return allowed_turns
 
+    def location_available_for_card(self, location: 'Location', card: 'CardInstance'):
+        return location.is_available_with(self, card)
+
     def get_playable_cards(self) -> List['CardInstance']:
-        return [card for card in self.hand_cards if card.is_playable_with(self.game, card)]
+        return [card for card in self.hand_cards if card.is_playable(self, card)]
 
     def get_playable_locations_with(self, card: 'CardInstance') -> List['Location']:
         return [location for location in self.game.locations if self.location_available_for_card(location, card)]
 
-    def play(self, card: 'CardInstance'):
-        self.hand_cards.remove(card)
-        self.played_cards.append(card)
-        card.agent_effect.execute(self.game)
+    def get_in_play(self, faction: Faction) -> int:
+        return sum(
+            map(lambda played_card: played_card.factions.count(faction), self.played_cards + self.revealed_cards))
 
-    def reveal(self, card: 'CardInstance'):
-        self.hand_cards.remove(card)
-        self.revealed_cards.append(card)
-        card.reveal_effect.execute(self.game)
+    def get_in_discard(self, faction: Faction) -> int:
+        return sum(map(lambda card: card.factions.count(faction), self.discard_pile))
+
+    # Only use this for reveal turn i.e. fremen bond
+    def get_in_potential_play(self, faction: Faction) -> int:
+        return sum(map(lambda played_card: played_card.factions.count(faction),
+                       self.played_cards + self.revealed_cards + self.hand_cards))
+
+    def get_in_play_and_hand(self, faction: Faction) -> int:
+        return sum(map(lambda played_card: played_card.factions.count(faction),
+                       self.played_cards + self.revealed_cards + self.hand_cards))
 
     def deploy(self, n: int):
         self.garrison -= n
         self.in_combat += n
 
-    def play_plots(self):
+    def play_intrigue(self, intrigue_type: IntrigueType) -> IntrigueInstance:
+        chosen_intrigue = intrigue_choice(intrigue_type).resolve(self)
+        self.intrigues.remove(chosen_intrigue)
+        chosen_intrigue.effect(self)
+        return chosen_intrigue
+
+    def play_intrigues(self, intrigue_type: IntrigueType):
         while True:
-            playable_plots = self.get_playable_intrigues(IntrigueType.PLOT) + noIntrigue
-            plot_choice: 'IntrigueInstance' = self.resolver.resolve(self.game, playable_plots)
-            if plot_choice is noIntrigue:
+            played_intrigue = self.play_intrigue(intrigue_type)
+            if played_intrigue is no_intrigue:
                 break
-            plot_choice.effect.execute(self.game, [])
+
+    def can_buy(self, card: 'CardInstance'):
+        return self.game.shop.shop_can_buy(card, self)
+
+    def buy(self, card: 'CardInstance'):
+        self.game.shop.shop_buy(card, self)
 
     def deploy_troops(self):
-        deployable_troops = list(range(-min(self.retreatable, self.in_combat), min(self.deployable, self.garrison)+1))
-        deployment_choice = self.resolver.resolve(self.game, deployable_troops)
+        deployable_troops = list(range(-min(self.retractable, self.in_combat), min(self.deployable, self.garrison) + 1))
+        deployment_choice = self.resolver.resolve(self, deployable_troops)
         self.deploy(deployment_choice)
+
+    def after_conflict(self):
+        self.in_combat = 0
+        self.force = 0
+        self.deployable = 0
+        self.retractable = 0
+        self.persuasion = 2 if self.in_high_council else 0
+        self.agents = self.max_agents
+        # get mentat notes that the mentat is available next round (f.e. through a conflict reward)
+        # adding the mentat registers it as unavailable for the current round
+        if self.get_mentat:
+            self.add_mentat()
+
+        self.passed_combat_intrigue = False
+
+        self.on_win = []
+
     def agent_turn(self):
         playable_cards = self.get_playable_cards()
-        card_choice: 'CardInstance' = self.resolver.resolve(self.game, playable_cards)
-        playable_locations = self.get_playable_locations_with(card_choice)
-        location_choice: 'Location' = self.resolver.resolve(self.game, playable_locations)
-        location_choice.occupy()
-        location_choice.requirement.fulfill(self.game)
-        location_choice.effect.execute(self.game, [])
-        self.play(card_choice)
-        self.play_plots()
+        card_choice: 'CardInstance' = self.resolver.resolve(self, playable_cards)
+        self.hand_cards.remove(card_choice)
+        self.played_cards.append(card_choice)
+
+        # kwisatz manages the turn itself in the card effect
+        if card_choice is kwisatz_haderach:
+            card_choice.agent_effect(self)
+        else:
+            playable_locations = self.get_playable_locations_with(card_choice)
+            location_choice: 'Location' = self.resolver.resolve(self, playable_locations)
+            self.current_location = location_choice  # needed for some effects
+            self.agents -= 1
+
+            location_choice.requirement.fulfill(self)
+            location_choice.effect(self)
+
+            card_choice.agent_effect(self)
+            location_choice.occupy(self)
+
+        self.current_location = no_location
+
+        self.play_intrigues(IntrigueType.PLOT)
         self.deploy_troops()
+
+        self.agent_on_combat_location = False
+        self.get_mentat = False
+        self.voice = False
+        self.infiltrate = False
+        self.recruitment = False
 
     def reveal_turn(self):
-        for card in self.hand_cards:
-            self.reveal(card)
+        self.revealed = True
+        self.is_revealing_turn = True
+        while self.hand_cards:
+            card = self.hand_cards.pop()
+            self.revealed_cards.append(card)
+            card.reveal_effect(self)
         while True:
             available_cards = self.game.shop.get_cards_in_shop()
-            purchasable_cards = [card for card in available_cards if self.can_buy(card)] + noCard
-            card_choice: 'CardInstance' = self.resolver.resolve(self.game, purchasable_cards)
-            if card_choice is noCard:
+            purchasable_cards = [card for card in available_cards if
+                                 self.can_buy(card)] + no_card  # todo: find a better solution
+            card_choice: 'CardInstance' = self.resolver.resolve(self, purchasable_cards)
+            if card_choice is no_card:
                 break
             self.buy(card_choice)
-        self.play_plots()
-        self.deploy_troops()
+        self.play_intrigues(IntrigueType.PLOT)
+        self.deploy_troops()  # todo: RESTRICTION we cannot use a plot card to deploy troops and then use another plot card to retreat troops for reward
+        self.discard_pile.extend(self.played_cards)
+        self.discard_pile.extend(self.revealed_cards)
+        self.played_cards = []
+        self.revealed_cards = []
+        self.is_revealing_turn = False
+
+        self.guild_bankers = False
+        self.voice = False
 
     def agent_or_reveal_turn(self):
+        self.draw(5)
         turn_types = self.get_turn_types()
-        turn_choice = self.resolver.resolve(self.game, turn_types)
-        if turn_choice == TurnType.AGENT:
-            self.agent_turn()
-        elif turn_choice == TurnType.REVEAL:
-            self.reveal_turn()
+        turn_choice = self.resolver.resolve(self, turn_types)
+        self.play_intrigues(IntrigueType.PLOT)
+
+        # skip turn
+        if self.bindu_suspension:
+            self.bindu_suspension = False
+        else:
+            self.in_turn = True
+            if turn_choice == TurnType.AGENT:
+                self.agent_turn()
+            elif turn_choice == TurnType.REVEAL:
+                self.reveal_turn()
+
+        self.in_turn = False
 
     def combat_turn(self):
-        playable_conflict_intrigues = self.get_playable_intrigues(IntrigueType.CONFLICT) + noIntrigue
-        conflict_choice: 'IntrigueInstance' = self.resolver.resolve(self.game, playable_conflict_intrigues)
-        conflict_choice.effect.execute(self.game, [])
+        self.passed_combat_intrigue = False
+        intrigue = self.play_intrigue(IntrigueType.COMBAT)
+        if intrigue is no_intrigue:
+            self.passed_combat_intrigue = True
+
 
     def finale_turn(self):
-        while True:
-            playable_finale_intrigues = self.get_playable_intrigues(IntrigueType.FINALE)
-            if len(playable_finale_intrigues) == 0:
-                break
-            finale_choice: 'IntrigueInstance' = self.resolver.resolve(self.game, playable_finale_intrigues)
-            finale_choice.effect.execute(self.game, [])
-
+        self.in_finale = True
+        for finale_intrigue in filter(lambda intrigue: IntrigueType.FINALE in intrigue.intrigue_types, self.intrigues):
+            finale_intrigue.effect(self)

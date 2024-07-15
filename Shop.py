@@ -1,17 +1,23 @@
-from typing import Set, List
-import random
 import itertools
-from Cards import cards, plots, shop_cards, foldspace
+import random
+from typing import List
+
+from Cards import cards, plots, shop_cards, foldspace, the_spice_must_flow
+from dune_engine.Choice import bool_choice
+
+
 class Shop:
-    def __init__(self, game: 'Game'):
-        static_names = ['The Spice Must Flow', 'Arrakis Liaison']
+    def __init__(self):
         # Gets Card Instances for all cards in cards that are not in static_names
-        self.draw_pile: List['CardInstance'] =  list(itertools.chain.from_iterable(card.get_instances() for card in cards))
+        self.draw_pile: List['CardInstance'] = list(
+            itertools.chain.from_iterable(card.get_instances() for card in cards))
         random.shuffle(self.draw_pile)
-        self.intrigues: List['PlotInstance'] = list(itertools.chain.from_iterable(plot.get_instances() for plot in plots))
+        self.intrigues: List['IntrigueInstance'] = list(
+            itertools.chain.from_iterable(plot.get_instances() for plot in plots))
         random.shuffle(self.intrigues)
         # Gets Card Instances for names defined in static_names
-        self.imperium_row: List['CardInstance'] = list(itertools.chain.from_iterable(card.get_instances() for card in shop_cards))
+        self.imperium_row: List['CardInstance'] = list(
+            itertools.chain.from_iterable(card.get_instances() for card in shop_cards))
         while len(self.imperium_row) <= 5:
             self.refill()
         self.reserved_card = None
@@ -28,18 +34,33 @@ class Shop:
     def draw_shop_foldspace(self, player: 'Player'):
         if len(self.foldspaces) > 0:
             player.discard_pile.append(self.foldspaces.pop())
-    def get_cards_in_shop(self): # ToDo: fix this to contain static cards as well
+
+    def get_cards_in_shop(self):  # ToDo: fix this to contain static cards as well
         return self.imperium_row
-    def shop_buy(self, card: 'Card', player: 'Player'):
-        if card not in self.imperium_row:
-            raise Exception("Card not in the imperium row")
-        if player.persuasion < card.persuasion_cost:
-            raise Exception("Not enough solari")
+
+    def get_card(self, card: 'CardInstance', player: 'Player'):
         self.imperium_row.remove(card)
         self.refill()
+        if player.recruitment:
+            choice = bool_choice.resolve(player)
+            if choice:
+                player.deck.append(card)
+                return
         player.discard_pile.append(card)
-        player.change_persuasion(-card.persuasion_cost)
-        card.acquisition_effect.execute(player.game, []) # We only have choiceless effects
 
-    def shop_can_buy(self, card: 'Card', player: 'Player'):
+    def shop_buy(self, card: 'CardInstance', player: 'Player'):
+        actual_cost = card.persuasion_cost
+        if card is the_spice_must_flow:
+            if player.guild_bankers:
+                actual_cost -= 3
+
+        player.change_persuasion(-actual_cost)
+        card.acquisition_effect(player)
+
+        self.get_card(card, player)
+
+    def shop_can_buy(self, card: 'CardInstance', player: 'Player'):
+        if card is the_spice_must_flow:
+            if player.guild_bankers:
+                return player.persuasion >= card.persuasion_cost - 3
         return card in self.imperium_row and player.persuasion >= card.persuasion_cost
